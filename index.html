@@ -273,6 +273,8 @@ async function init(){
     state.vehicles=DEMO_VEHICLES;
     state.records=readLocalRecords();
   }
+  const savedVehicles=readSavedVehicles();
+  if(savedVehicles.length>0) state.vehicles=savedVehicles;
   state.records=state.records.filter(r=>{const [y,m]=r.date.split('-');return y>2026||(y=='2026'&&m>'08')});
   analyzeRecords();
   populateSelects();
@@ -407,6 +409,7 @@ function populateSelects(){
 }
 
 function renderAll(){
+  populateSelects();
   renderHome();
   document.getElementById('lastUpdated').textContent='最終更新: '+new Date().toLocaleString('ja-JP');
 }
@@ -633,6 +636,7 @@ function addStaff(){
 }
 function closeStaffModal(){document.getElementById('staffEditModal').classList.remove('show')}
 function saveVehicles(){try{localStorage.setItem('creaVehicles',JSON.stringify(state.vehicles))}catch(e){console.error('Save failed:',e)}}
+function readSavedVehicles(){try{return JSON.parse(localStorage.getItem('creaVehicles')||'[]')}catch(e){return[]}}
 
 function showPage(name){
   if(name==='admin'&&!state.admin){openAdminLogin();return}
