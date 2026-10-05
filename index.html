@@ -383,7 +383,7 @@ function renderHome(){
     return`<div class="vehicle"><div class="vehicle-head"><div><div class="vehicle-name">${esc(v.name)}</div><div class="vehicle-sub">${esc(v.detail)}</div></div>${hasAlert?'<span class="badge warn">要確認</span>':'<span class="badge ok">OK</span>'}</div><div class="stats"><div class="stat"><div class="v">${count}</div><div class="k">30日給油回数</div></div><div class="stat"><div class="v">${run}</div><div class="k">直近走行距離</div></div></div></div>`;
   }).join('');
   document.getElementById('vehicleCards').innerHTML=cardHtml||'<div class="empty">車両がありません。</div>';
-  document.getElementById('recentTable').innerHTML=historyTableHTML(recordsWithin(30),false);
+  document.getElementById('recentTable').innerHTML=historyTableHTML(recordsWithin(30).slice(0,8),false);
 }
 
 // days を指定すると、その日数以内の給油記録のアラートのみ返す
