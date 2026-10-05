@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <title>Crea 車両管理</title>
+  <style>
+    :root{
+      --yellow:#dac623; --black:#111; --dark:#242727; --gray:#6b7280;
+      --line:#e5e7eb; --bg:#f6f6f4; --white:#fff; --red:#c62828;
+      --red-bg:#fff1f1; --green:#2e7d32; --shadow:0 8px 28px rgba(0,0,0,.07);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--black);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .app{min-height:100vh}
+    header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+    .header-inner{max-width:1180px;margin:auto;padding:14px 20px;display:flex;align-items:center;gap:14px}
+    .brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .logo{width:42px;height:42px;border-radius:12px;background:var(--yellow);display:grid;place-items:center;font-weight:900}
+    .brand h1{font-size:20px;margin:0;white-space:nowrap}
+    .header-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+    .btn{border:0;border-radius:12px;padding:11px 15px;font-weight:800;background:#ececec;color:#111}
+    .btn.primary{background:var(--yellow)}
+    .btn.dark{background:#111;color:#fff}
+    .btn.danger{background:#b91c1c;color:#fff}
+    .btn.ghost{background:#fff;border:1px solid var(--line)}
+    .btn.small{padding:7px 10px;border-radius:9px;font-size:12px}
+    main{max-width:1180px;margin:auto;padding:24px 20px 60px}
+    .page{display:none}.page.active{display:block}
+    .page-title{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:18px}
+    .page-title h2{margin:0;font-size:28px}.muted{color:var(--gray);font-size:13px}
+    .grid2{display:grid;grid-template-columns:1fr 1.15fr;gap:18px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+    .card h3{margin:0 0 14px;font-size:17px}
+    .alert-list{display:grid;gap:10px}
+    .alert{padding:13px 14px;border-radius:12px;background:var(--red-bg);border-left:4px solid var(--red);font-size:14px}
+    .alert strong{display:block;margin-bottom:4px}
+    .empty{padding:24px;text-align:center;color:var(--gray);background:#fafafa;border-radius:12px}
+    .vehicle-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .vehicle{border:1px solid var(--line);border-radius:14px;padding:14px}
+    .vehicle-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+    .vehicle-name{font-weight:900}
+    .vehicle-sub{font-size:12px;color:var(--gray);margin-top:2px}
+    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+    .stat{background:#f7f7f5;border-radius:10px;padding:10px}
+    .stat .v{font-size:18px;font-weight:900}.stat .k{font-size:11px;color:var(--gray);margin-top:2px}
+    .section{margin-top:18px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+    .field{display:grid;gap:6px}.field label{font-size:12px;font-weight:800;color:#555}
+    input,select,textarea{width:100%;border:1px solid #d8d8d8;border-radius:11px;padding:11px 12px;background:#fff;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:#999;box-shadow:0 0 0 3px rgba(218,198,35,.18)}
+    .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    .full{grid-column:1/-1}
+    .form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fff}
+    table{width:100%;border-collapse:collapse;min-width:850px}
+    th,td{padding:12px 11px;text-align:left;border-bottom:1px solid #eee;font-size:13px;white-space:nowrap}
+    th{background:#f5f5f3;font-size:12px;position:sticky;top:0}
+    tr:last-child td{border-bottom:0}
+    .badge{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#eee}
+    .badge.warn{background:#ffe5e5;color:#a51616}.badge.ok{background:#e8f5e9;color:#256b29}
+    .modal-backdrop{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:18px}
+    .modal-backdrop.show{display:flex}
+    .modal{width:min(620px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:20px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.24)}
+    .modal h3{margin:0 0 18px}
+    .admin-panel{display:none}.admin-panel.show{display:block}
+    .notice{padding:12px 14px;background:#fffbe5;border:1px solid #eee19b;border-radius:12px;font-size:13px;margin-bottom:16px}
+    .error{color:var(--red);font-size:12px;min-height:18px}
+    .loading{position:fixed;inset:0;z-index:200;background:rgba(255,255,255,.65);display:none;place-items:center;font-weight:900}
+    .loading.show{display:grid}
+    @media(max-width:800px){
+      .header-inner{padding:11px 14px}.brand h1{font-size:17px}.logo{width:36px;height:36px}
+      .header-actions .btn{padding:9px 10px;font-size:12px}
+      main{padding:18px 12px 50px}.grid2{grid-template-columns:1fr}.vehicle-cards{grid-template-columns:1fr}
+      .form-grid{grid-template-columns:1fr}.page-title h2{font-size:24px}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-inner">
+      <div class="brand"><div class="logo">C</div><h1>車両管理</h1></div>
+      <div class="header-actions">
+        <button class="btn primary" onclick="openFuelModal()">給油新規登録</button>
+        <button class="btn ghost" onclick="showPage('history')">給油履歴</button>
+        <button class="btn dark" onclick="openAdminLogin()">管理者</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="page-home" class="page active">
+      <div class="page-title"><div><h2>ダッシュボード</h2><div class="muted">集計期間：過去30日</div></div><div class="muted" id="lastUpdated"></div></div>
+      <div class="grid2">
+        <div class="card">
+          <h3>要確認アラート</h3>
+          <div id="alertList" class="alert-list"></div>
+        </div>
+        <div class="card">
+          <h3>車両サマリー</h3>
+          <div id="vehicleCards" class="vehicle-cards"></div>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>直近の給油履歴</h3>
+        <div id="recentTable"></div>
+      </div>
+    </section>
+
+    <section id="page-history" class="page">
+      <div class="page-title"><div><h2>給油履歴</h2><div class="muted">過去30日の給油記録</div></div><button class="btn ghost" onclick="showPage('home')">← 戻る</button></div>
+      <div class="card">
+        <div class="toolbar">
+          <select id="historyVehicle" onchange="renderHistory()" style="max-width:240px"><option value="">すべての車両</option></select>
+          <input id="historyKeyword" oninput="renderHistory()" placeholder="記入者・メモを検索" style="max-width:280px">
+        </div>
+        <div id="historyTable"></div>
+      </div>
+    </section>
+
+    <section id="page-admin" class="page">
+      <div class="page-title"><div><h2>管理者ページ</h2><div class="muted">履歴の編集・削除、アラート確認</div></div><button class="btn ghost" onclick="logoutAdmin()">ログアウト</button></div>
+      <div class="admin-panel show">
+        <div class="card">
+          <h3>要確認アラート一覧</h3>
+          <div id="adminAlerts" class="alert-list"></div>
+        </div>
+        <div class="card section">
+          <h3>記入者別 給油回数（過去30日）</h3>
+          <div id="staffCounts"></div>
+        </div>
+        <div class="card section">
+          <h3>給油履歴一覧</h3>
+          <div id="adminHistory"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="fuelModal" class="modal-backdrop">
+  <div class="modal">
+    <h3 id="fuelModalTitle">給油を記録</h3>
+    <input type="hidden" id="fuelId">
+    <div class="form-grid">
+      <div class="field">
+        <label>給油日 *</label>
+        <input type="date" id="fuelDate">
+      </div>
+      <div class="field">
+        <label>車両 *</label>
+        <select id="fuelVehicle"><option value="">選択してください</option></select>
+      </div>
+      <div class="field">
+        <label>走行距離（km） *</label>
+        <input type="number" id="fuelOdometer" min="0">
+      </div>
+      <div class="field">
+        <label>給油量（L）</label>
+        <input type="number" id="fuelLiters" min="0" step="0.1">
+      </div>
+      <div class="field">
+        <label>給油金額（¥）</label>
+        <input type="number" id="fuelAmount" min="0">
+      </div>
+      <div class="field">
+        <label>記入者 *</label>
+        <input type="text" id="fuelStaff" placeholder="例: 山田太郎">
+      </div>
+      <div class="field full">
+        <label>メモ</label>
+        <textarea id="fuelMemo" rows="3" placeholder="給油時の特記事項など"></textarea>
+      </div>
+      <div class="error full" id="fuelError"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" onclick="closeFuelModal()">キャンセル</button>
+      <button class="btn primary" onclick="saveFuel()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="adminModal" class="modal-backdrop">
+  <div class="modal" style="max-width:420px">
+    <h3>管理者ログイン</h3>
+    <div class="field">
+      <label>パスワード</label>
+      <input type="password" id="adminPassword">
+    </div>
+    <div class="error" id="adminError"></div>
+    <div class="form-actions">
+      <button class="btn ghost" onclick="closeAdminLogin()">キャンセル</button>
+      <button class="btn dark" onclick="loginAdmin()">ログイン</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="loading">読み込み中...</div>
+
+<script>
+const ADMIN_PASSWORD='19810324';
+const GAS_URL='https://script.google.com/macros/s/AKfycbxGAHBIH8R8Jzd2ZBMMaeowXMwlo7bitBQucv9cOaJYNzgMKJ33iVaZ5O6YoAd2X79gYQ/exec';
+const DEMO_VEHICLES=[
+  {id:'touran-mori',name:'VWトゥーラン',detail:'森'},
+  {id:'touran-yamada',name:'VWトゥーラン',detail:'山田'},
+  {id:'touran-noguchi',name:'VWトゥーラン',detail:'野口'},
+  {id:'touran-udo',name:'VWトゥーラン',detail:'宇戸平'},
+  {id:'rav4-nakamura',name:'RAV4',detail:'中村'},
+  {id:'keitora-maekawa',name:'軽トラ',detail:'前川'}
+];
+let state={admin:false,vehicles:DEMO_VEHICLES,records:[]};
+
+window.addEventListener('load',init);
+async function init(){
+  try{
+    const data=await apiGetData();
+    state.vehicles=data.vehicles||DEMO_VEHICLES;
+    state.records=data.records||[];
+    populateSelects();
+    renderAll();
+  }catch(e){
+    console.error('Init failed:',e.message);
+    state.vehicles=DEMO_VEHICLES;
+    state.records=readLocalRecords();
+    populateSelects();
+    renderAll();
+  }
+}
+
+function populateSelects(){
+  const opts=state.vehicles.map(v=>`<option value="${v.id}">${v.name}${v.detail?'｜'+v.detail:''}</option>`).join('');
+  document.getElementById('fuelVehicle').innerHTML='<option value="">選択してください</option>'+opts;
+  const historyOpts=state.vehicles.map(v=>`<option value="${v.id}">${v.name}${v.detail?'｜'+v.detail:''}</option>`).join('');
+  document.getElementById('historyVehicle').innerHTML='<option value="">すべての車両</option>'+historyOpts;
+}
+
+function renderAll(){
+  renderHome();
+  document.getElementById('lastUpdated').textContent='最終更新: '+new Date().toLocaleString('ja-JP');
+}
+
+function renderHome(){
+  const alerts=buildAlerts();
+  document.getElementById('alertList').innerHTML=alerts.length?alerts.map(x=>`<div class="alert"><strong>${esc(x.vehicle.name)} ${x.vehicle.detail?'｜'+esc(x.vehicle.detail):''}</strong>${esc(x.text)}<div class="muted">${fmtDate(x.date)}</div></div>`).join(''):'<div class="empty">要確認アラートはありません。</div>';
+  const cardHtml=state.vehicles.map(v=>{
+    const records=state.records.filter(r=>r.vehicleId===v.id);
+    const last30=records.filter(r=>dayDiff(r.date,todayStr())<=29);
+    const lastRec=last30.sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
+    const lastOdo=lastRec?.odometer;
+    const run=!lastOdo?'—':lastRec && lastRec.odometer?num(lastRec.odometer)+' km':'—';
+    const count=last30.length;
+    const hasAlert=alerts.some(x=>x.vehicle.id===v.id);
+    return`<div class="vehicle"><div class="vehicle-head"><div><div class="vehicle-name">${esc(v.name)}</div><div class="vehicle-sub">${esc(v.detail)}</div></div>${hasAlert?'<span class="badge warn">要確認</span>':'<span class="badge ok">OK</span>'}</div><div class="stats"><div class="stat"><div class="v">${count}</div><div class="k">30日給油回数</div></div><div class="stat"><div class="v">${run}</div><div class="k">直近走行距離</div></div></div></div>`;
+  }).join('');
+  document.getElementById('vehicleCards').innerHTML=cardHtml||'<div class="empty">車両がありません。</div>';
+  document.getElementById('recentTable').innerHTML=historyTableHTML(records30(),false);
+}
+
+function buildAlerts(){
+  const alerts=[];
+  const now=new Date();
+  state.vehicles.forEach(v=>{
+    const vRecords=state.records.filter(r=>r.vehicleId===v.id).sort((a,b)=>parseDate(b.date)-parseDate(a.date));
+    if(!vRecords.length) return;
+    const last=vRecords[0];
+    const daysSince=dayDiff(last.date,todayStr());
+    if(daysSince>=0&&daysSince<=6){
+      alerts.push({vehicle:v,text:`前回給油から${daysSince}日。7日以内は要確認。`,date:last.date});
+    }
+  });
+  return alerts;
+}
+
+function records30(){
+  return state.records.filter(r=>dayDiff(r.date,todayStr())<=29).sort((a,b)=>parseDate(b.date)-parseDate(a.date));
+}
+
+function historyTableHTML(recs,showEdit){
+  if(!recs.length) return '<div class="empty">給油履歴がありません。</div>';
+  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>記入者</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=state.vehicles.find(x=>x.id===r.vehicleId);return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v?.name||'')} ${v?.detail?esc(v.detail):''}</td><td>${num(r.odometer||0)} km</td><td>${esc(r.staff)}</td>${showEdit?`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`:''}</tr>`}).join('')}</tbody></table></div>`;
+}
+
+function renderHistory(){
+  const vId=document.getElementById('historyVehicle').value;
+  const kw=document.getElementById('historyKeyword').value.toLowerCase();
+  let recs=records30();
+  if(vId) recs=recs.filter(r=>r.vehicleId===vId);
+  if(kw) recs=recs.filter(r=>(r.staff||'').toLowerCase().includes(kw)||(r.memo||'').toLowerCase().includes(kw));
+  document.getElementById('historyTable').innerHTML=historyTableHTML(recs,false);
+}
+
+function recordFuelEconomy(r){
+  if(!(r.liters>0) || r.odometer==null) return null;
+  const prev=state.records.filter(x=>x.vehicleId===r.vehicleId && parseDate(x.date)<=parseDate(r.date) && x.id!==r.id && x.odometer!=null)
+    .sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
+  if(!prev || r.odometer<prev.odometer) return null;
+  return (r.odometer-prev.odometer)/r.liters;
+}
+
+function renderAdmin(){
+  const alerts=buildAlerts();
+  document.getElementById('adminAlerts').innerHTML=alerts.length?alerts.map(x=>`<div class="alert"><strong>${esc(x.vehicle.name)} ${x.vehicle.detail?'｜'+esc(x.vehicle.detail):''}</strong>${esc(x.text)}<div class="muted">${fmtDate(x.date)}</div></div>`).join(''):'<div class="empty">要確認アラートはありません。</div>';
+  const counts={}; records30().forEach(r=>{if(r.staff) counts[r.staff]=(counts[r.staff]||0)+1});
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('staffCounts').innerHTML=entries.length?`<div class="table-wrap"><table style="min-width:420px"><thead><tr><th>記入者</th><th>給油回数</th></tr></thead><tbody>${entries.map(([n,c])=>`<tr><td>${esc(n)}</td><td><strong>${c}回</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">データがありません。</div>';
+  document.getElementById('adminHistory').innerHTML=historyTableHTML(records30(),true);
+}
+
+function openFuelModal(){
+  document.getElementById('fuelModalTitle').textContent='給油を記録';
+  ['fuelId','fuelOdometer','fuelLiters','fuelStaff','fuelAmount','fuelMemo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fuelVehicle').value='';
+  document.getElementById('fuelDate').value=todayStr();
+  document.getElementById('fuelError').textContent='';
+  document.getElementById('fuelModal').classList.add('show');
+}
+function closeFuelModal(){document.getElementById('fuelModal').classList.remove('show')}
+
+function editFuel(id){
+  const r=state.records.find(x=>x.id===id); if(!r)return;
+  document.getElementById('fuelModalTitle').textContent='給油履歴を編集';
+  document.getElementById('fuelId').value=r.id;
+  document.getElementById('fuelDate').value=r.date;
+  document.getElementById('fuelVehicle').value=r.vehicleId;
+  document.getElementById('fuelOdometer').value=r.odometer??'';
+  document.getElementById('fuelLiters').value=r.liters??'';
+  document.getElementById('fuelStaff').value=r.staff;
+  document.getElementById('fuelAmount').value=r.amount??'';
+  document.getElementById('fuelMemo').value=r.memo||'';
+  document.getElementById('fuelError').textContent='';
+  document.getElementById('fuelModal').classList.add('show');
+}
+
+async function saveFuel(){
+  const id=document.getElementById('fuelId').value.trim();
+  const record={
+    id:id||('r_'+Date.now()),
+    date:document.getElementById('fuelDate').value,
+    vehicleId:document.getElementById('fuelVehicle').value,
+    odometer:numOrNull(document.getElementById('fuelOdometer').value),
+    liters:numOrNull(document.getElementById('fuelLiters').value),
+    staff:document.getElementById('fuelStaff').value.trim(),
+    amount:numOrNull(document.getElementById('fuelAmount').value),
+    memo:document.getElementById('fuelMemo').value.trim()
+  };
+  const err=validateFuel(record,id);
+  if(err){document.getElementById('fuelError').textContent=err;return}
+  setLoading(true);
+  try{
+    if(id){
+      await apiUpdateRecord(record);
+      const idx=state.records.findIndex(x=>x.id===id); if(idx>=0) state.records[idx]=record;
+    }else{
+      const saved=await apiSaveRecord(record); record.id=String(saved?.id||record.id); state.records.push(record);
+    }
+    persistLocal(); closeFuelModal(); renderAll();
+  }catch(e){document.getElementById('fuelError').textContent='保存に失敗しました。'+(e?.message||'');}
+  finally{setLoading(false)}
+}
+
+function validateFuel(r,editingId){
+  if(!r.date) return '給油日を入力してください。';
+  if(!r.vehicleId) return '車両を選択してください。';
+  if(r.odometer==null) return '走行距離を入力してください。';
+  if(!r.staff) return '記入者を入力してください。';
+  const prev=state.records.filter(x=>x.vehicleId===r.vehicleId && x.id!==editingId && parseDate(x.date)<=parseDate(r.date) && x.odometer!=null)
+    .sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
+  if(prev && r.odometer<prev.odometer) return `走行距離が前回記録（${num(prev.odometer)}km）より少ないため登録できません。`;
+  return '';
+}
+
+async function deleteFuel(id){
+  if(!state.admin)return;
+  if(!confirm('この給油履歴を削除しますか？'))return;
+  setLoading(true);
+  try{await apiDeleteRecord(id);state.records=state.records.filter(r=>r.id!==id);persistLocal();renderAll();renderAdmin();}
+  catch(e){alert('削除に失敗しました。')}
+  finally{setLoading(false)}
+}
+
+function openAdminLogin(){document.getElementById('adminPassword').value='';document.getElementById('adminError').textContent='';document.getElementById('adminModal').classList.add('show');setTimeout(()=>document.getElementById('adminPassword').focus(),100)}
+function closeAdminLogin(){document.getElementById('adminModal').classList.remove('show')}
+function loginAdmin(){
+  if(document.getElementById('adminPassword').value!==ADMIN_PASSWORD){document.getElementById('adminError').textContent='パスワードが違います。';return}
+  state.admin=true; closeAdminLogin(); showPage('admin'); renderAdmin();
+}
+function logoutAdmin(){state.admin=false;showPage('home')}
+
+function showPage(name){
+  if(name==='admin'&&!state.admin){openAdminLogin();return}
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(name==='history')renderHistory();
+  if(name==='admin')renderAdmin();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function apiGetData(){
+  try{
+    const resp=await fetch(GAS_URL+'?action=getVehicleAppData');
+    if(!resp.ok) throw new Error('API error');
+    return await resp.json();
+  }catch(e){
+    console.warn('GAS fetch failed, using local:',e.message);
+    return {vehicles:DEMO_VEHICLES,records:readLocalRecords()};
+  }
+}
+
+async function apiSaveRecord(record){
+  try{
+    const resp=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveFuelRecord',record:record})
+    });
+    if(!resp.ok) throw new Error('API error');
+    return await resp.json();
+  }catch(e){
+    console.warn('Save to GAS failed, using local:',e.message);
+    return {ok:true,id:record.id};
+  }
+}
+
+async function apiUpdateRecord(record){
+  try{
+    const resp=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'updateFuelRecord',record:record})
+    });
+    if(!resp.ok) throw new Error('API error');
+    return await resp.json();
+  }catch(e){
+    console.warn('Update in GAS failed:',e.message);
+    return {ok:true};
+  }
+}
+
+async function apiDeleteRecord(id){
+  try{
+    const resp=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'deleteFuelRecord',id:id})
+    });
+    if(!resp.ok) throw new Error('API error');
+    return await resp.json();
+  }catch(e){
+    console.warn('Delete in GAS failed:',e.message);
+    return {ok:true};
+  }
+}
+
+function readLocalRecords(){try{return JSON.parse(localStorage.getItem('creaVehicleRecords')||'[]')}catch(e){return[]}}
+function persistLocal(){localStorage.setItem('creaVehicleRecords',JSON.stringify(state.records))}
+
+function setLoading(v){document.getElementById('loading').classList.toggle('show',!!v)}
+function parseDate(s){if(!s)return null;const d=new Date(String(s).replace(/\//g,'-')+'T00:00:00');return isNaN(d)?null:d}
+function dayDiff(a,b){const x=parseDate(a),y=parseDate(b);return (!x||!y)?null:Math.round((y-x)/86400000)}
+function avg(a){const b=a.filter(Number.isFinite);return b.length?b.reduce((s,x)=>s+x,0)/b.length:null}
+function numOrNull(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
+function num(v){return Number(v).toLocaleString('ja-JP',{maximumFractionDigits:2})}
+function fmtDate(s){const d=parseDate(s);return d?`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`:'—'}
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function jsq(v){return String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+</script>
+</body>
+</html>
