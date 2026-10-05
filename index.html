@@ -168,14 +168,6 @@
         <input type="number" id="fuelOdometer" min="0">
       </div>
       <div class="field">
-        <label>給油量（L）</label>
-        <input type="number" id="fuelLiters" min="0" step="0.1">
-      </div>
-      <div class="field">
-        <label>給油金額（¥）</label>
-        <input type="number" id="fuelAmount" min="0">
-      </div>
-      <div class="field">
         <label>記入者 *</label>
         <select id="fuelStaff"></select>
       </div>
@@ -459,7 +451,7 @@ function recordsWithin(days){
 
 function historyTableHTML(recs,showEdit){
   if(!recs.length) return '<div class="empty">給油履歴がありません。</div>';
-  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>前回比</th><th>記入者</th><th>確認</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=vehicleOf(r);const warn=(r.alerts||[]).length;return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v.name)} ${v.detail?esc(v.detail):''}</td><td>${r.odometer!=null?num(r.odometer)+' km':'—'}</td><td>${r.run!=null?(r.run>=0?'+':'')+num(r.run)+' km':'—'}</td><td>${esc(r.staff)}</td><td>${warn?`<span class="badge warn" title="${esc(r.alerts.join('\n'))}">要確認</span>`:'<span class="badge ok">OK</span>'}</td>${showEdit?(r.source==='sheet'?'<td class="muted">シート</td>':`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`):''}</tr>`}).join('')}</tbody></table></div>`;
+  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>前回比</th><th>記入者</th><th>確認</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=vehicleOf(r);const warn=(r.alerts||[]).length;return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v.name)} ${v.detail?esc(v.detail):''}</td><td>${r.odometer!=null?num(r.odometer)+' km':'—'}</td><td>${r.run!=null?(r.run>=0?'+':'')+num(r.run)+' km':'—'}</td><td>${esc(r.staff)}</td><td>${warn?`<span class="badge warn" title="${esc(r.alerts.join('\n'))}">要確認</span>`:'<span class="badge ok">OK</span>'}</td>${showEdit?(r.source==='sheet'?`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button></td>`:`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`):''}</tr>`}).join('')}</tbody></table></div>`;
 }
 
 function renderHistory(){
@@ -508,7 +500,7 @@ function renderAdmin(){
 
 function openFuelModal(){
   document.getElementById('fuelModalTitle').textContent='給油を記録';
-  ['fuelId','fuelOdometer','fuelLiters','fuelStaff','fuelAmount','fuelMemo'].forEach(id=>document.getElementById(id).value='');
+  ['fuelId','fuelOdometer','fuelStaff','fuelMemo'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fuelVehicle').value='';
   document.getElementById('fuelDate').value=todayStr();
   document.getElementById('fuelError').textContent='';
@@ -523,11 +515,9 @@ function editFuel(id){
   document.getElementById('fuelDate').value=r.date;
   document.getElementById('fuelVehicle').value=r.vehicleId;
   document.getElementById('fuelOdometer').value=r.odometer??'';
-  document.getElementById('fuelLiters').value=r.liters??'';
   const fsel=document.getElementById('fuelStaff');
   if(r.staff&&!state.staff.includes(r.staff)){state.staff.push(r.staff);saveStaff();populateSelects()}
   fsel.value=r.staff;
-  document.getElementById('fuelAmount').value=r.amount??'';
   document.getElementById('fuelMemo').value=r.memo||'';
   document.getElementById('fuelError').textContent='';
   document.getElementById('fuelModal').classList.add('show');
@@ -540,9 +530,7 @@ async function saveFuel(){
     date:document.getElementById('fuelDate').value,
     vehicleId:document.getElementById('fuelVehicle').value,
     odometer:numOrNull(document.getElementById('fuelOdometer').value),
-    liters:numOrNull(document.getElementById('fuelLiters').value),
     staff:document.getElementById('fuelStaff').value.trim(),
-    amount:numOrNull(document.getElementById('fuelAmount').value),
     memo:document.getElementById('fuelMemo').value.trim()
   };
   const err=validateFuel(record,id);
