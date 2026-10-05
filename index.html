@@ -371,7 +371,7 @@ function renderAll(){
 }
 
 function renderHome(){
-  const alerts=buildAlerts(30).slice(0,6);
+  const alerts=buildAlerts(0).slice(0,6);
   document.getElementById('alertList').innerHTML=alertsHTML(alerts);
   const cardHtml=state.vehicles.map(v=>{
     const records=state.records.filter(r=>r.vehicleId===v.id);
