@@ -128,8 +128,15 @@
       <div class="page-title"><div><h2>管理者ページ</h2><div class="muted">履歴の編集・削除、アラート確認</div></div><button class="btn ghost" onclick="logoutAdmin()">ログアウト</button></div>
       <div class="admin-panel show">
         <div class="card">
+          <div style="display:flex;gap:10px;margin-bottom:16px">
+            <button class="btn primary" onclick="editVehicles()">車両の編集</button>
+            <button class="btn primary" onclick="editStaff()">使用者の編集</button>
+          </div>
+        </div>
+        <div class="card">
           <h3>要確認アラート一覧 <span class="muted" id="adminAlertCount"></span></h3>
           <div id="adminAlerts" class="alert-list"></div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:14px" id="adminAlertsPagination"></div>
         </div>
         <div class="card section">
           <h3>記入者別 給油回数（過去30日）</h3>
@@ -138,6 +145,7 @@
         <div class="card section">
           <h3>給油履歴一覧</h3>
           <div id="adminHistory"></div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:14px" id="adminHistoryPagination"></div>
         </div>
       </div>
     </section>
@@ -216,7 +224,7 @@ const DEMO_VEHICLES=[
 ];
 // 給油記録のスプレッドシート（Googleフォーム回答）を直接読み込む
 const SHEET_CSV_URL='https://docs.google.com/spreadsheets/d/1bX_2EP0Ww-8POEaCyucEsLkaty2ACFr1Qw9z8a4LBaM/export?format=csv&gid=1506722302';
-let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false};
+let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false,adminAlertPage:0,adminHistoryPage:0};
 
 window.addEventListener('load',init);
 async function init(){
@@ -435,11 +443,28 @@ function recordFuelEconomy(r){
 function renderAdmin(){
   const alerts=buildAlerts(0);
   document.getElementById('adminAlertCount').textContent=`全期間 ${alerts.length}件`;
-  document.getElementById('adminAlerts').innerHTML=alertsHTML(alerts);
+  const alertsPerPage=5;
+  const alertsStart=state.adminAlertPage*alertsPerPage;
+  const alertsEnd=alertsStart+alertsPerPage;
+  const alertsSlice=alerts.slice(alertsStart,alertsEnd);
+  const alertsPages=Math.ceil(alerts.length/alertsPerPage);
+  document.getElementById('adminAlerts').innerHTML=alertsSlice.length?`<div class="alert-list">${alertsSlice.map(a=>`<div class="alert"><strong>${esc(a.vehicle)}｜${esc(a.staff)}</strong>${esc(a.msg)}<br><small>${fmtDate(a.date)}・${a.odometer!=null?num(a.odometer)+' km':'—'}・記入者 ${esc(a.staff)}</small></div>`).join('')}</div>`:'<div class="empty">アラートがありません。</div>';
+  let paginationHtml='';
+  for(let i=0;i<alertsPages;i++){paginationHtml+=`<button class="btn small ${i===state.adminAlertPage?'primary':''}" onclick="state.adminAlertPage=${i};renderAdmin()">${i+1}</button>`}
+  document.getElementById('adminAlertsPagination').innerHTML=alertsPages>1?paginationHtml:'';
   const counts={}; records30().forEach(r=>{if(r.staff) counts[r.staff]=(counts[r.staff]||0)+1});
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   document.getElementById('staffCounts').innerHTML=entries.length?`<div class="table-wrap"><table style="min-width:0"><thead><tr><th>記入者</th><th>給油回数</th></tr></thead><tbody>${entries.map(([n,c])=>`<tr><td>${esc(n)}</td><td><strong>${c}回</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">データがありません。</div>';
-  document.getElementById('adminHistory').innerHTML=historyTableHTML(recordsWithin(0),true);
+  const allRecs=recordsWithin(0);
+  const histPerPage=10;
+  const histStart=state.adminHistoryPage*histPerPage;
+  const histEnd=histStart+histPerPage;
+  const histSlice=allRecs.slice(histStart,histEnd);
+  const histPages=Math.ceil(allRecs.length/histPerPage);
+  document.getElementById('adminHistory').innerHTML=historyTableHTML(histSlice,true);
+  let histPaginationHtml='';
+  for(let i=0;i<histPages;i++){histPaginationHtml+=`<button class="btn small ${i===state.adminHistoryPage?'primary':''}" onclick="state.adminHistoryPage=${i};renderAdmin()">${i+1}</button>`}
+  document.getElementById('adminHistoryPagination').innerHTML=histPages>1?histPaginationHtml:'';
 }
 
 function openFuelModal(){
@@ -521,6 +546,8 @@ function loginAdmin(){
   state.admin=true; closeAdminLogin(); showPage('admin'); renderAdmin();
 }
 function logoutAdmin(){state.admin=false;showPage('home')}
+function editVehicles(){alert('車両編集機能は準備中です。')}
+function editStaff(){alert('使用者編集機能は準備中です。')}
 
 function showPage(name){
   if(name==='admin'&&!state.admin){openAdminLogin();return}
