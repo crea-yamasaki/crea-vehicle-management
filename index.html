@@ -207,6 +207,40 @@
   </div>
 </div>
 
+<div id="vehicleEditModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>車両管理</h3>
+    <div id="vehicleList" style="max-height:300px;overflow-y:auto;margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px"></div>
+    <div class="field">
+      <label>車両名 *</label>
+      <input type="text" id="vehicleName" placeholder="新規車両名">
+    </div>
+    <div class="field">
+      <label>詳細</label>
+      <input type="text" id="vehicleDetail" placeholder="車両詳細情報">
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" onclick="closeVehicleModal()">キャンセル</button>
+      <button class="btn primary" onclick="addVehicle()">追加</button>
+    </div>
+  </div>
+</div>
+
+<div id="staffEditModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>使用者管理</h3>
+    <div id="staffList" style="max-height:300px;overflow-y:auto;margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px"></div>
+    <div class="field">
+      <label>使用者名 *</label>
+      <input type="text" id="staffName" placeholder="新規使用者名">
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost" onclick="closeStaffModal()">キャンセル</button>
+      <button class="btn primary" onclick="addStaff()">追加</button>
+    </div>
+  </div>
+</div>
+
 <div id="loading" class="loading">読み込み中...</div>
 
 <script>
@@ -546,36 +580,52 @@ function loginAdmin(){
 }
 function logoutAdmin(){state.admin=false;showPage('home')}
 function editVehicles(){
-  const vlist=state.vehicles.map((v,i)=>`${i+1}. ${esc(v.name)}${v.detail?' - '+esc(v.detail):''}`).join('\n');
-  const action=prompt(`【車両管理】\n\n${vlist}\n\n操作: 追加(+新規名前) / 削除(- 番号) / 変更(番号 新しい名前)`);
-  if(!action) return;
-  if(action.startsWith('+')){
-    const name=action.slice(1).trim();
-    if(name) state.vehicles.push({id:Date.now().toString(),name:name,detail:''});
-  }else if(action.startsWith('-')){
-    const idx=parseInt(action.slice(1).trim())-1;
-    if(idx>=0&&idx<state.vehicles.length) state.vehicles.splice(idx,1);
-  }else{
-    const parts=action.split(' ');
-    const idx=parseInt(parts[0])-1;
-    const newName=parts.slice(1).join(' ');
-    if(idx>=0&&idx<state.vehicles.length&&newName) state.vehicles[idx].name=newName;
-  }
+  renderVehicleList();
+  document.getElementById('vehicleEditModal').classList.add('show');
+  document.getElementById('vehicleName').focus();
+}
+function renderVehicleList(){
+  const html=state.vehicles.map((v,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(v.name)}${v.detail?' ('+esc(v.detail)+')':''}</span><button class="btn small danger" onclick="deleteVehicle(${i})">削除</button></div>`).join('');
+  document.getElementById('vehicleList').innerHTML=html||'<div style="padding:8px;color:#999">登録済み車両がありません</div>';
+}
+function addVehicle(){
+  const name=document.getElementById('vehicleName').value.trim();
+  if(!name){alert('車両名を入力してください');return}
+  const detail=document.getElementById('vehicleDetail').value.trim();
+  state.vehicles.push({id:Date.now().toString(),name:name,detail:detail});
   saveVehicles();
+  document.getElementById('vehicleName').value='';
+  document.getElementById('vehicleDetail').value='';
+  renderVehicleList();
   renderAll();
 }
-function editStaff(){
-  const staffSet=new Set(state.records.map(r=>r.staff).filter(s=>s));
-  const slist=Array.from(staffSet).map((s,i)=>`${i+1}. ${esc(s)}`).join('\n');
-  const action=prompt(`【使用者管理】\n\n${slist}\n\n操作: 追加(+新規名前) / 削除(- 番号) / 変更(番号 新しい名前)`);
-  if(!action) return;
-  if(action.startsWith('+')){
-    const newStaff=action.slice(1).trim();
-    if(newStaff) alert('新規使用者「'+newStaff+'」は給油記録時に使用できます。');
-  }else{
-    alert('使用者の編集・削除は給油記録から管理してください。');
+function deleteVehicle(idx){
+  if(confirm('「'+esc(state.vehicles[idx].name)+'」を削除しますか？')){
+    state.vehicles.splice(idx,1);
+    saveVehicles();
+    renderVehicleList();
+    renderAll();
   }
 }
+function closeVehicleModal(){document.getElementById('vehicleEditModal').classList.remove('show')}
+function editStaff(){
+  renderStaffList();
+  document.getElementById('staffEditModal').classList.add('show');
+  document.getElementById('staffName').focus();
+}
+function renderStaffList(){
+  const staffSet=new Set(state.records.map(r=>r.staff).filter(s=>s));
+  const html=Array.from(staffSet).map((s,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb">${i+1}. ${esc(s)}</div>`).join('');
+  document.getElementById('staffList').innerHTML=html||'<div style="padding:8px;color:#999">使用者がありません</div>';
+}
+function addStaff(){
+  const name=document.getElementById('staffName').value.trim();
+  if(!name){alert('使用者名を入力してください');return}
+  alert('新規使用者「'+esc(name)+'」は次回の給油記録時に使用できます。');
+  document.getElementById('staffName').value='';
+  closeStaffModal();
+}
+function closeStaffModal(){document.getElementById('staffEditModal').classList.remove('show')}
 function saveVehicles(){try{localStorage.setItem('creaVehicles',JSON.stringify(state.vehicles))}catch(e){console.error('Save failed:',e)}}
 
 function showPage(name){
