@@ -113,9 +113,10 @@
     </section>
 
     <section id="page-history" class="page">
-      <div class="page-title"><div><h2>給油履歴</h2><div class="muted">過去30日の給油記録</div></div><button class="btn ghost" onclick="showPage('home')">← 戻る</button></div>
+      <div class="page-title"><div><h2>給油履歴</h2><div class="muted">スプレッドシートの給油記録</div></div><button class="btn ghost" onclick="showPage('home')">← 戻る</button></div>
       <div class="card">
         <div class="toolbar">
+          <select id="historyPeriod" onchange="renderHistory()" style="max-width:160px"><option value="30">過去30日</option><option value="90">過去90日</option><option value="0">全期間</option></select>
           <select id="historyVehicle" onchange="renderHistory()" style="max-width:240px"><option value="">すべての車両</option></select>
           <input id="historyKeyword" oninput="renderHistory()" placeholder="記入者・メモを検索" style="max-width:280px">
         </div>
@@ -127,7 +128,7 @@
       <div class="page-title"><div><h2>管理者ページ</h2><div class="muted">履歴の編集・削除、アラート確認</div></div><button class="btn ghost" onclick="logoutAdmin()">ログアウト</button></div>
       <div class="admin-panel show">
         <div class="card">
-          <h3>要確認アラート一覧</h3>
+          <h3>要確認アラート一覧 <span class="muted" id="adminAlertCount"></span></h3>
           <div id="adminAlerts" class="alert-list"></div>
         </div>
         <div class="card section">
@@ -213,23 +214,148 @@ const DEMO_VEHICLES=[
   {id:'rav4-nakamura',name:'RAV4',detail:'中村'},
   {id:'keitora-maekawa',name:'軽トラ',detail:'前川'}
 ];
-let state={admin:false,vehicles:DEMO_VEHICLES,records:[]};
+// 給油記録のスプレッドシート（Googleフォーム回答）を直接読み込む
+const SHEET_CSV_URL='https://docs.google.com/spreadsheets/d/1bX_2EP0Ww-8POEaCyucEsLkaty2ACFr1Qw9z8a4LBaM/export?format=csv&gid=1506722302';
+let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false};
 
 window.addEventListener('load',init);
 async function init(){
+  setLoading(true);
   try{
-    const data=await apiGetData();
-    state.vehicles=data.vehicles||DEMO_VEHICLES;
-    state.records=data.records||[];
-    populateSelects();
-    renderAll();
+    const resp=await fetch(SHEET_CSV_URL,{cache:'no-store'});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const sheetRecords=parseSheetCsv(await resp.text());
+    state.records=sheetRecords.concat(readLocalRecords());
+    state.vehicles=buildVehicles(state.records);
+    state.sheetLoaded=true;
   }catch(e){
-    console.error('Init failed:',e.message);
+    console.error('Sheet load failed:',e.message);
     state.vehicles=DEMO_VEHICLES;
     state.records=readLocalRecords();
-    populateSelects();
-    renderAll();
   }
+  analyzeRecords();
+  populateSelects();
+  renderAll();
+  setLoading(false);
+}
+
+function parseCsv(text){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){
+      if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}
+      else cur+=c;
+    }else if(c==='"') q=true;
+    else if(c===','){row.push(cur);cur=''}
+    else if(c==='\n'||c==='\r'){
+      if(c==='\r'&&text[i+1]==='\n') i++;
+      row.push(cur);rows.push(row);row=[];cur='';
+    }else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row)}
+  return rows;
+}
+
+// 列: タイムスタンプ, 車両名称, 給油日時, 走行距離, 記入者
+function parseSheetCsv(text){
+  const rows=parseCsv(text.replace(/^﻿/,''));
+  const head=rows.shift()||[];
+  const col=name=>head.findIndex(h=>h.trim()===name);
+  const iTs=col('タイムスタンプ'),iV=col('車両名称'),iD=col('給油日時'),iO=col('走行距離'),iS=col('記入者');
+  return rows.map((r,i)=>{
+    const vehicle=(r[iV]||'').trim();
+    const odoText=(r[iO]||'').trim();
+    const odo=parseFloat(odoText.replace(/[^\d.]/g,''));
+    return{
+      id:'s_'+(i+2),source:'sheet',
+      timestamp:(r[iTs]||'').trim(),
+      date:normDate(r[iD]||r[iTs]),
+      vehicleId:vehicle,
+      odometer:Number.isFinite(odo)?odo:null,
+      staff:(r[iS]||'').trim(),
+      memo:''
+    };
+  }).filter(r=>r.vehicleId&&r.date);
+}
+
+// 「VWトゥーラン(森)」→ name:VWトゥーラン / detail:森
+function buildVehicles(records){
+  const ids=[...new Set(records.map(r=>r.vehicleId))];
+  const vs=ids.map(id=>{
+    const demo=DEMO_VEHICLES.find(v=>v.id===id);
+    if(demo) return demo;
+    const m=id.match(/^(.*?)[(（]([^()（）]*)[)）]\s*$/);
+    return m?{id,name:m[1].trim(),detail:m[2].trim()}:{id,name:id,detail:''};
+  });
+  const count=id=>records.filter(r=>r.vehicleId===id).length;
+  return vs.sort((a,b)=>count(b.id)-count(a.id));
+}
+
+function normDate(s){
+  const m=String(s||'').match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+  return m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`:'';
+}
+
+function median(a){const b=a.filter(Number.isFinite).sort((x,y)=>x-y);if(!b.length)return null;const h=b.length>>1;return b.length%2?b[h]:(b[h-1]+b[h])/2}
+
+// 走行距離の上限目安：1500km + 1日あたり100km
+function maxRun(days){return 1500+100*Math.max(0,days||0)}
+const ODO_TOLERANCE=1000;
+
+// 各記録に要確認アラートを付与する
+function analyzeRecords(){
+  state.records.forEach(r=>{r.alerts=[];r.outlier=false;r.prevOdo=null;r.run=null});
+  state.vehicles.forEach(v=>{
+    const list=state.records.filter(r=>r.vehicleId===v.id)
+      .sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:String(a.timestamp).localeCompare(String(b.timestamp))));
+    let base=[];
+    list.forEach((r,i)=>{
+      if(r.odometer==null){r.alerts.push('走行距離が未入力です。');return}
+      if(!base.length){base.push(r);return}
+      const last=base[base.length-1];
+      const ref=median(base.slice(-3).map(x=>x.odometer));
+      const diff=r.odometer-ref;
+      if(diff<-ODO_TOLERANCE||diff>maxRun(dayDiff(last.date,r.date))){
+        // 次の2件がこの値に続いていれば、以前の記録側が誤っていたとみなす
+        const nexts=list.slice(i+1).filter(x=>x.odometer!=null).slice(0,2);
+        const persist=nexts.length===2&&nexts.every((n,k)=>{
+          const p=k?nexts[0]:r;
+          return n.odometer>=p.odometer-ODO_TOLERANCE&&n.odometer-p.odometer<=maxRun(dayDiff(p.date,n.date));
+        });
+        if(persist){
+          r.alerts.push(`走行距離が前回までの記録（約${num(ref)}km）から${num(r.odometer)}kmへ大きく変動。以前の記録が誤っている可能性があります。`);
+          base=[r];
+        }else{
+          r.outlier=true;
+          r.alerts.push(`走行距離の入力ミスの疑い（${num(r.odometer)}km／前後の記録は約${num(ref)}km）。`);
+        }
+        return;
+      }
+      r.prevOdo=last.odometer;
+      r.run=r.odometer-last.odometer;
+      if(r.run<0) r.alerts.push(`前回記録（${num(last.odometer)}km）より走行距離が${num(-r.run)}km少なくなっています。`);
+      base.push(r);
+    });
+    // 通常より短い距離での再給油
+    const typical=median(list.filter(r=>r.run>0).map(r=>r.run));
+    list.forEach((r,i)=>{
+      if(r.run==null) return;
+      const prev=list.slice(0,i).reverse().find(x=>x.odometer===r.prevOdo&&!x.outlier);
+      const days=prev?dayDiff(prev.date,r.date):null;
+      if(r.run===0&&days===0) r.alerts.push('同じ日・同じ走行距離の記録があります（重複登録の疑い）。');
+      else if(typical&&r.run>=0&&r.run<typical*0.4&&days!=null&&days<7)
+        r.alerts.push(`前回給油から${days}日・${num(r.run)}kmで再給油（この車両の通常は約${num(Math.round(typical))}km）。`);
+    });
+  });
+  // 入力日と給油日のずれ
+  state.records.forEach(r=>{
+    const ts=normDate(r.timestamp);
+    if(!ts) return;
+    const lag=dayDiff(r.date,ts);
+    if(lag>=3) r.alerts.push(`給油日から${lag}日後に入力されています。`);
+    else if(lag<0) r.alerts.push('給油日が入力日より後の日付になっています。');
+  });
 }
 
 function populateSelects(){
@@ -245,50 +371,53 @@ function renderAll(){
 }
 
 function renderHome(){
-  const alerts=buildAlerts();
-  document.getElementById('alertList').innerHTML=alerts.length?alerts.map(x=>`<div class="alert"><strong>${esc(x.vehicle.name)} ${x.vehicle.detail?'｜'+esc(x.vehicle.detail):''}</strong>${esc(x.text)}<div class="muted">${fmtDate(x.date)}</div></div>`).join(''):'<div class="empty">要確認アラートはありません。</div>';
+  const alerts=buildAlerts(30);
+  document.getElementById('alertList').innerHTML=alertsHTML(alerts);
   const cardHtml=state.vehicles.map(v=>{
     const records=state.records.filter(r=>r.vehicleId===v.id);
     const last30=records.filter(r=>dayDiff(r.date,todayStr())<=29);
-    const lastRec=last30.sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
-    const lastOdo=lastRec?.odometer;
-    const run=!lastOdo?'—':lastRec && lastRec.odometer?num(lastRec.odometer)+' km':'—';
+    const lastRec=sortDesc(records.filter(r=>r.odometer!=null&&!r.outlier))[0];
+    const run=lastRec?num(lastRec.odometer)+' km':'—';
     const count=last30.length;
     const hasAlert=alerts.some(x=>x.vehicle.id===v.id);
     return`<div class="vehicle"><div class="vehicle-head"><div><div class="vehicle-name">${esc(v.name)}</div><div class="vehicle-sub">${esc(v.detail)}</div></div>${hasAlert?'<span class="badge warn">要確認</span>':'<span class="badge ok">OK</span>'}</div><div class="stats"><div class="stat"><div class="v">${count}</div><div class="k">30日給油回数</div></div><div class="stat"><div class="v">${run}</div><div class="k">直近走行距離</div></div></div></div>`;
   }).join('');
   document.getElementById('vehicleCards').innerHTML=cardHtml||'<div class="empty">車両がありません。</div>';
-  document.getElementById('recentTable').innerHTML=historyTableHTML(records30(),false);
+  document.getElementById('recentTable').innerHTML=historyTableHTML(recordsWithin(30),false);
 }
 
-function buildAlerts(){
+// days を指定すると、その日数以内の給油記録のアラートのみ返す
+function buildAlerts(days){
   const alerts=[];
-  const now=new Date();
-  state.vehicles.forEach(v=>{
-    const vRecords=state.records.filter(r=>r.vehicleId===v.id).sort((a,b)=>parseDate(b.date)-parseDate(a.date));
-    if(!vRecords.length) return;
-    const last=vRecords[0];
-    const daysSince=dayDiff(last.date,todayStr());
-    if(daysSince>=0&&daysSince<=6){
-      alerts.push({vehicle:v,text:`前回給油から${daysSince}日。7日以内は要確認。`,date:last.date});
-    }
+  sortDesc(days?recordsWithin(days):state.records).forEach(r=>{
+    const v=vehicleOf(r);
+    (r.alerts||[]).forEach(text=>alerts.push({vehicle:v,record:r,text,date:r.date}));
   });
   return alerts;
 }
 
-function records30(){
-  return state.records.filter(r=>dayDiff(r.date,todayStr())<=29).sort((a,b)=>parseDate(b.date)-parseDate(a.date));
+function alertsHTML(alerts){
+  return alerts.length?alerts.map(x=>`<div class="alert"><strong>${esc(x.vehicle.name)} ${x.vehicle.detail?'｜'+esc(x.vehicle.detail):''}</strong>${esc(x.text)}<div class="muted">${fmtDate(x.date)}・${x.record.odometer!=null?num(x.record.odometer)+' km・':''}記入者 ${esc(x.record.staff)}</div></div>`).join(''):'<div class="empty">要確認アラートはありません。</div>';
+}
+
+function vehicleOf(r){return state.vehicles.find(x=>x.id===r.vehicleId)||{id:r.vehicleId,name:r.vehicleId,detail:''}}
+function sortDesc(recs){return recs.slice().sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:String(b.timestamp||'').localeCompare(String(a.timestamp||''))))}
+
+function records30(){return recordsWithin(30)}
+
+function recordsWithin(days){
+  return sortDesc(days?state.records.filter(r=>dayDiff(r.date,todayStr())<=days-1):state.records);
 }
 
 function historyTableHTML(recs,showEdit){
   if(!recs.length) return '<div class="empty">給油履歴がありません。</div>';
-  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>記入者</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=state.vehicles.find(x=>x.id===r.vehicleId);return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v?.name||'')} ${v?.detail?esc(v.detail):''}</td><td>${num(r.odometer||0)} km</td><td>${esc(r.staff)}</td>${showEdit?`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`:''}</tr>`}).join('')}</tbody></table></div>`;
+  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>前回比</th><th>記入者</th><th>確認</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=vehicleOf(r);const warn=(r.alerts||[]).length;return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v.name)} ${v.detail?esc(v.detail):''}</td><td>${r.odometer!=null?num(r.odometer)+' km':'—'}</td><td>${r.run!=null?(r.run>=0?'+':'')+num(r.run)+' km':'—'}</td><td>${esc(r.staff)}</td><td>${warn?`<span class="badge warn" title="${esc(r.alerts.join('\n'))}">要確認</span>`:'<span class="badge ok">OK</span>'}</td>${showEdit?(r.source==='sheet'?'<td class="muted">シート</td>':`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`):''}</tr>`}).join('')}</tbody></table></div>`;
 }
 
 function renderHistory(){
   const vId=document.getElementById('historyVehicle').value;
   const kw=document.getElementById('historyKeyword').value.toLowerCase();
-  let recs=records30();
+  let recs=recordsWithin(Number(document.getElementById('historyPeriod').value)||0);
   if(vId) recs=recs.filter(r=>r.vehicleId===vId);
   if(kw) recs=recs.filter(r=>(r.staff||'').toLowerCase().includes(kw)||(r.memo||'').toLowerCase().includes(kw));
   document.getElementById('historyTable').innerHTML=historyTableHTML(recs,false);
@@ -303,12 +432,13 @@ function recordFuelEconomy(r){
 }
 
 function renderAdmin(){
-  const alerts=buildAlerts();
-  document.getElementById('adminAlerts').innerHTML=alerts.length?alerts.map(x=>`<div class="alert"><strong>${esc(x.vehicle.name)} ${x.vehicle.detail?'｜'+esc(x.vehicle.detail):''}</strong>${esc(x.text)}<div class="muted">${fmtDate(x.date)}</div></div>`).join(''):'<div class="empty">要確認アラートはありません。</div>';
+  const alerts=buildAlerts(0);
+  document.getElementById('adminAlertCount').textContent=`全期間 ${alerts.length}件`;
+  document.getElementById('adminAlerts').innerHTML=alertsHTML(alerts);
   const counts={}; records30().forEach(r=>{if(r.staff) counts[r.staff]=(counts[r.staff]||0)+1});
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('staffCounts').innerHTML=entries.length?`<div class="table-wrap"><table style="min-width:420px"><thead><tr><th>記入者</th><th>給油回数</th></tr></thead><tbody>${entries.map(([n,c])=>`<tr><td>${esc(n)}</td><td><strong>${c}回</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">データがありません。</div>';
-  document.getElementById('adminHistory').innerHTML=historyTableHTML(records30(),true);
+  document.getElementById('staffCounts').innerHTML=entries.length?`<div class="table-wrap"><table style="min-width:0"><thead><tr><th>記入者</th><th>給油回数</th></tr></thead><tbody>${entries.map(([n,c])=>`<tr><td>${esc(n)}</td><td><strong>${c}回</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">データがありません。</div>';
+  document.getElementById('adminHistory').innerHTML=historyTableHTML(recordsWithin(0),true);
 }
 
 function openFuelModal(){
