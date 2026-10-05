@@ -446,7 +446,7 @@ function renderAdmin(){
   const alertsEnd=alertsStart+alertsPerPage;
   const alertsSlice=alerts.slice(alertsStart,alertsEnd);
   const alertsPages=Math.ceil(alerts.length/alertsPerPage);
-  document.getElementById('adminAlerts').innerHTML=alertsSlice.length?`<div class="alert-list">${alertsSlice.map(a=>`<div class="alert"><strong>${esc(a.vehicle)}｜${esc(a.staff)}</strong>${esc(a.msg)}<br><small>${fmtDate(a.date)}・${a.odometer!=null?num(a.odometer)+' km':'—'}・記入者 ${esc(a.staff)}</small></div>`).join('')}</div>`:'<div class="empty">アラートがありません。</div>';
+  document.getElementById('adminAlerts').innerHTML=alertsSlice.length?`<div class="alert-list">${alertsSlice.map(a=>`<div class="alert"><strong>${esc(a.vehicle.name)} ${a.vehicle.detail?'｜'+esc(a.vehicle.detail):''}</strong>${esc(a.text)}<div class="muted">${fmtDate(a.date)}・${a.record.odometer!=null?num(a.record.odometer)+' km・':''}記入者 ${esc(a.record.staff)}</div></div>`).join('')}</div>`:'<div class="empty">アラートがありません。</div>';
   let paginationHtml='';
   for(let i=0;i<alertsPages;i++){paginationHtml+=`<button class="btn small ${i===state.adminAlertPage?'primary':''}" onclick="state.adminAlertPage=${i};renderAdmin()">${i+1}</button>`}
   document.getElementById('adminAlertsPagination').innerHTML=alertsPages>1?paginationHtml:'';
