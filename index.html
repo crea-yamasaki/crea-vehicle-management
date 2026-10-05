@@ -239,6 +239,7 @@ async function init(){
     state.vehicles=DEMO_VEHICLES;
     state.records=readLocalRecords();
   }
+  state.records=state.records.filter(r=>{const [y,m]=r.date.split('-');return y>2026||(y=='2026'&&m>'08')});
   analyzeRecords();
   populateSelects();
   renderAll();
@@ -544,8 +545,38 @@ function loginAdmin(){
   state.admin=true; closeAdminLogin(); showPage('admin'); renderAdmin();
 }
 function logoutAdmin(){state.admin=false;showPage('home')}
-function editVehicles(){alert('車両編集機能は準備中です。')}
-function editStaff(){alert('使用者編集機能は準備中です。')}
+function editVehicles(){
+  const vlist=state.vehicles.map((v,i)=>`${i+1}. ${esc(v.name)}${v.detail?' - '+esc(v.detail):''}`).join('\n');
+  const action=prompt(`【車両管理】\n\n${vlist}\n\n操作: 追加(+新規名前) / 削除(- 番号) / 変更(番号 新しい名前)`);
+  if(!action) return;
+  if(action.startsWith('+')){
+    const name=action.slice(1).trim();
+    if(name) state.vehicles.push({id:Date.now().toString(),name:name,detail:''});
+  }else if(action.startsWith('-')){
+    const idx=parseInt(action.slice(1).trim())-1;
+    if(idx>=0&&idx<state.vehicles.length) state.vehicles.splice(idx,1);
+  }else{
+    const parts=action.split(' ');
+    const idx=parseInt(parts[0])-1;
+    const newName=parts.slice(1).join(' ');
+    if(idx>=0&&idx<state.vehicles.length&&newName) state.vehicles[idx].name=newName;
+  }
+  saveVehicles();
+  renderAll();
+}
+function editStaff(){
+  const staffSet=new Set(state.records.map(r=>r.staff).filter(s=>s));
+  const slist=Array.from(staffSet).map((s,i)=>`${i+1}. ${esc(s)}`).join('\n');
+  const action=prompt(`【使用者管理】\n\n${slist}\n\n操作: 追加(+新規名前) / 削除(- 番号) / 変更(番号 新しい名前)`);
+  if(!action) return;
+  if(action.startsWith('+')){
+    const newStaff=action.slice(1).trim();
+    if(newStaff) alert('新規使用者「'+newStaff+'」は給油記録時に使用できます。');
+  }else{
+    alert('使用者の編集・削除は給油記録から管理してください。');
+  }
+}
+function saveVehicles(){try{localStorage.setItem('creaVehicles',JSON.stringify(state.vehicles))}catch(e){console.error('Save failed:',e)}}
 
 function showPage(name){
   if(name==='admin'&&!state.admin){openAdminLogin();return}
