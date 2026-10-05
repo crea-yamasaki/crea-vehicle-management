@@ -615,8 +615,14 @@ function editStaff(){
 }
 function renderStaffList(){
   const staffSet=new Set(state.records.map(r=>r.staff).filter(s=>s));
-  const html=Array.from(staffSet).map((s,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb">${i+1}. ${esc(s)}</div>`).join('');
+  const staffList=Array.from(staffSet).sort();
+  const html=staffList.map((s,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(s)}</span><button class="btn small danger" onclick="deleteStaff('${jsq(s)}')">削除</button></div>`).join('');
   document.getElementById('staffList').innerHTML=html||'<div style="padding:8px;color:#999">使用者がありません</div>';
+}
+function deleteStaff(staffName){
+  if(confirm('「'+esc(staffName)+'」に関連する給油記録を確認してから削除してください。\n削除する場合は給油記録から個別に対応してください。')){
+    alert('使用者の削除は給油記録から行ってください。このシステムでは直接削除できません。');
+  }
 }
 function addStaff(){
   const name=document.getElementById('staffName').value.trim();
