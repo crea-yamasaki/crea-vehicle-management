@@ -177,7 +177,7 @@
       </div>
       <div class="field">
         <label>記入者 *</label>
-        <input type="text" id="fuelStaff" placeholder="例: 山田太郎">
+        <select id="fuelStaff"></select>
       </div>
       <div class="field full">
         <label>メモ</label>
@@ -256,7 +256,7 @@ const DEMO_VEHICLES=[
 ];
 // 給油記録のスプレッドシート（Googleフォーム回答）を直接読み込む
 const SHEET_CSV_URL='https://docs.google.com/spreadsheets/d/1bX_2EP0Ww-8POEaCyucEsLkaty2ACFr1Qw9z8a4LBaM/export?format=csv&gid=1506722302';
-let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false,adminAlertPage:0,adminHistoryPage:0};
+let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false,adminAlertPage:0,adminHistoryPage:0,staff:[],pendingDel:null};
 
 window.addEventListener('load',init);
 async function init(){
@@ -273,9 +273,9 @@ async function init(){
     state.vehicles=DEMO_VEHICLES;
     state.records=readLocalRecords();
   }
-  const savedVehicles=readSavedVehicles();
-  if(savedVehicles.length>0) state.vehicles=savedVehicles;
+  if(localStorage.getItem('creaVehicles')!==null) state.vehicles=readSavedVehicles();
   state.records=state.records.filter(r=>{const [y,m]=r.date.split('-');return y>2026||(y=='2026'&&m>'08')});
+  loadStaff();
   analyzeRecords();
   populateSelects();
   renderAll();
@@ -406,6 +406,9 @@ function populateSelects(){
   document.getElementById('fuelVehicle').innerHTML='<option value="">選択してください</option>'+opts;
   const historyOpts=state.vehicles.map(v=>`<option value="${v.id}">${v.name}${v.detail?'｜'+v.detail:''}</option>`).join('');
   document.getElementById('historyVehicle').innerHTML='<option value="">すべての車両</option>'+historyOpts;
+  const fs=document.getElementById('fuelStaff'),cur=fs.value;
+  fs.innerHTML='<option value="">選択してください</option>'+state.staff.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  fs.value=cur;
 }
 
 function renderAll(){
@@ -521,7 +524,9 @@ function editFuel(id){
   document.getElementById('fuelVehicle').value=r.vehicleId;
   document.getElementById('fuelOdometer').value=r.odometer??'';
   document.getElementById('fuelLiters').value=r.liters??'';
-  document.getElementById('fuelStaff').value=r.staff;
+  const fsel=document.getElementById('fuelStaff');
+  if(r.staff&&!state.staff.includes(r.staff)){state.staff.push(r.staff);saveStaff();populateSelects()}
+  fsel.value=r.staff;
   document.getElementById('fuelAmount').value=r.amount??'';
   document.getElementById('fuelMemo').value=r.memo||'';
   document.getElementById('fuelError').textContent='';
@@ -559,7 +564,7 @@ function validateFuel(r,editingId){
   if(!r.date) return '給油日を入力してください。';
   if(!r.vehicleId) return '車両を選択してください。';
   if(r.odometer==null) return '走行距離を入力してください。';
-  if(!r.staff) return '記入者を入力してください。';
+  if(!r.staff) return '記入者を選択してください。';
   const prev=state.records.filter(x=>x.vehicleId===r.vehicleId && x.id!==editingId && parseDate(x.date)<=parseDate(r.date) && x.odometer!=null)
     .sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
   if(prev && r.odometer<prev.odometer) return `走行距離が前回記録（${num(prev.odometer)}km）より少ないため登録できません。`;
@@ -568,7 +573,6 @@ function validateFuel(r,editingId){
 
 async function deleteFuel(id){
   if(!state.admin)return;
-  if(!confirm('この給油履歴を削除しますか？'))return;
   setLoading(true);
   try{await apiDeleteRecord(id);state.records=state.records.filter(r=>r.id!==id);persistLocal();renderAll();renderAdmin();}
   catch(e){alert('削除に失敗しました。')}
@@ -588,12 +592,15 @@ function editVehicles(){
   document.getElementById('vehicleName').focus();
 }
 function renderVehicleList(){
-  const html=state.vehicles.map((v,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(v.name)}${v.detail?' ('+esc(v.detail)+')':''}</span><button class="btn small danger" onclick="deleteVehicle(${i})">削除</button></div>`).join('');
+  const html=state.vehicles.map((v,i)=>{
+    const armed=state.pendingDel==='v'+i;
+    return `<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(v.name)}${v.detail?' ('+esc(v.detail)+')':''}</span><button class="btn small danger" onclick="deleteVehicle(${i})">${armed?'本当に削除':'削除'}</button></div>`;
+  }).join('');
   document.getElementById('vehicleList').innerHTML=html||'<div style="padding:8px;color:#999">登録済み車両がありません</div>';
 }
 function addVehicle(){
   const name=document.getElementById('vehicleName').value.trim();
-  if(!name){alert('車両名を入力してください');return}
+  if(!name){document.getElementById('vehicleName').focus();return}
   const detail=document.getElementById('vehicleDetail').value.trim();
   state.vehicles.push({id:Date.now().toString(),name:name,detail:detail});
   saveVehicles();
@@ -603,38 +610,49 @@ function addVehicle(){
   renderAll();
 }
 function deleteVehicle(idx){
-  if(confirm('「'+esc(state.vehicles[idx].name)+'」を削除しますか？')){
-    state.vehicles.splice(idx,1);
-    saveVehicles();
-    renderVehicleList();
-    renderAll();
-  }
+  if(state.pendingDel!=='v'+idx){state.pendingDel='v'+idx;renderVehicleList();return}
+  state.pendingDel=null;
+  state.vehicles.splice(idx,1);
+  saveVehicles();
+  renderVehicleList();
+  renderAll();
 }
-function closeVehicleModal(){document.getElementById('vehicleEditModal').classList.remove('show')}
+function closeVehicleModal(){state.pendingDel=null;document.getElementById('vehicleEditModal').classList.remove('show')}
 function editStaff(){
   renderStaffList();
   document.getElementById('staffEditModal').classList.add('show');
   document.getElementById('staffName').focus();
 }
+function loadStaff(){
+  const raw=localStorage.getItem('creaStaff');
+  if(raw!==null){try{state.staff=JSON.parse(raw)}catch(e){state.staff=[]}}
+  else{state.staff=Array.from(new Set(state.records.map(r=>r.staff).filter(x=>x))).sort();saveStaff()}
+}
+function saveStaff(){try{localStorage.setItem('creaStaff',JSON.stringify(state.staff))}catch(e){console.error('Save failed:',e)}}
 function renderStaffList(){
-  const staffSet=new Set(state.records.map(r=>r.staff).filter(s=>s));
-  const staffList=Array.from(staffSet).sort();
-  const html=staffList.map((s,i)=>`<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(s)}</span><button class="btn small danger" onclick="deleteStaff('${jsq(s)}')">削除</button></div>`).join('');
+  const html=state.staff.map((n,i)=>{
+    const armed=state.pendingDel==='s'+i;
+    return `<div style="padding:8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><span>${i+1}. ${esc(n)}</span><button class="btn small danger" onclick="deleteStaff(${i})">${armed?'本当に削除':'削除'}</button></div>`;
+  }).join('');
   document.getElementById('staffList').innerHTML=html||'<div style="padding:8px;color:#999">使用者がありません</div>';
 }
-function deleteStaff(staffName){
-  if(confirm('「'+esc(staffName)+'」に関連する給油記録を確認してから削除してください。\n削除する場合は給油記録から個別に対応してください。')){
-    alert('使用者の削除は給油記録から行ってください。このシステムでは直接削除できません。');
-  }
+function deleteStaff(idx){
+  if(state.pendingDel!=='s'+idx){state.pendingDel='s'+idx;renderStaffList();return}
+  state.pendingDel=null;
+  state.staff.splice(idx,1);
+  saveStaff();
+  renderStaffList();
+  populateSelects();
 }
 function addStaff(){
   const name=document.getElementById('staffName').value.trim();
-  if(!name){alert('使用者名を入力してください');return}
-  alert('新規使用者「'+esc(name)+'」は次回の給油記録時に使用できます。');
+  if(!name){document.getElementById('staffName').focus();return}
+  if(!state.staff.includes(name)){state.staff.push(name);saveStaff()}
   document.getElementById('staffName').value='';
-  closeStaffModal();
+  renderStaffList();
+  populateSelects();
 }
-function closeStaffModal(){document.getElementById('staffEditModal').classList.remove('show')}
+function closeStaffModal(){state.pendingDel=null;document.getElementById('staffEditModal').classList.remove('show')}
 function saveVehicles(){try{localStorage.setItem('creaVehicles',JSON.stringify(state.vehicles))}catch(e){console.error('Save failed:',e)}}
 function readSavedVehicles(){try{return JSON.parse(localStorage.getItem('creaVehicles')||'[]')}catch(e){return[]}}
 
