@@ -40,7 +40,15 @@
     .alert{padding:13px 14px;border-radius:12px;background:var(--red-bg);border-left:4px solid var(--red);font-size:14px}
     .alert strong{display:block;margin-bottom:4px}
     .empty{padding:24px;text-align:center;color:var(--gray);background:#fafafa;border-radius:12px}
-    .vehicle-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .vehicle-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .vehicle-cards .vehicle{padding:12px;min-width:0}
+    .vehicle-cards .vehicle-head{flex-wrap:wrap}
+    .vehicle-cards .vehicle-name,.vehicle-cards .vehicle-sub{overflow-wrap:anywhere}
+    .vehicle-cards .stats{grid-template-columns:1fr}
+    .vehicle-cards .stat .v{font-size:16px}
+    .chart-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+    .chart-head h3{margin:0}.chart-head select{width:auto;min-width:200px;max-width:100%}
+    .chart-svg{width:100%;height:auto;display:block}
     .vehicle{border:1px solid var(--line);border-radius:14px;padding:14px}
     .vehicle-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
     .vehicle-name{font-weight:900}
@@ -75,7 +83,7 @@
     @media(max-width:800px){
       .header-inner{padding:11px 14px}.brand h1{font-size:17px}.logo{width:36px;height:36px}
       .header-actions .btn{padding:9px 10px;font-size:12px}
-      main{padding:18px 12px 50px}.grid2{grid-template-columns:1fr}.vehicle-cards{grid-template-columns:1fr}
+      main{padding:18px 12px 50px}.grid2{grid-template-columns:1fr}.vehicle-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
       .form-grid{grid-template-columns:1fr}.page-title h2{font-size:24px}
     }
   </style>
@@ -96,15 +104,20 @@
   <main>
     <section id="page-home" class="page active">
       <div class="page-title"><div><h2>ダッシュボード</h2><div class="muted">集計期間：過去30日</div></div><div class="muted" id="lastUpdated"></div></div>
-      <div class="grid2">
-        <div class="card">
-          <h3>要確認アラート</h3>
-          <div id="alertList" class="alert-list"></div>
+      <div class="card section">
+        <div class="chart-head">
+          <h3>積算走行距離グラフ</h3>
+          <select id="chartVehicle" onchange="state.chartVehicle=this.value;renderChart()"></select>
         </div>
-        <div class="card">
-          <h3>車両サマリー</h3>
-          <div id="vehicleCards" class="vehicle-cards"></div>
-        </div>
+        <div id="chartBox"></div>
+      </div>
+      <div class="card section">
+        <h3>要確認アラート</h3>
+        <div id="alertList" class="alert-list"></div>
+      </div>
+      <div class="card section">
+        <h3>車両サマリー</h3>
+        <div id="vehicleCards" class="vehicle-cards"></div>
       </div>
       <div class="card section">
         <h3>直近の給油履歴</h3>
@@ -249,7 +262,7 @@ const DEMO_VEHICLES=[
 ];
 // 給油記録のスプレッドシート（Googleフォーム回答）を直接読み込む
 const SHEET_CSV_URL='https://docs.google.com/spreadsheets/d/1bX_2EP0Ww-8POEaCyucEsLkaty2ACFr1Qw9z8a4LBaM/export?format=csv&gid=1506722302';
-let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false,adminAlertPage:0,adminHistoryPage:0,staff:[],pendingDel:null};
+let state={admin:false,vehicles:DEMO_VEHICLES,records:[],sheetLoaded:false,adminAlertPage:0,adminHistoryPage:0,staff:[],pendingDel:null,chartVehicle:''};
 
 window.addEventListener('load',init);
 async function init(){
@@ -396,6 +409,10 @@ function populateSelects(){
   document.getElementById('fuelVehicle').innerHTML='<option value="">選択してください</option>'+opts;
   const historyOpts=state.vehicles.map(v=>`<option value="${v.id}">${v.name}${v.detail?'｜'+v.detail:''}</option>`).join('');
   document.getElementById('historyVehicle').innerHTML='<option value="">すべての車両</option>'+historyOpts;
+  const cs=document.getElementById('chartVehicle');
+  if(!state.vehicles.some(v=>v.id===state.chartVehicle)) state.chartVehicle=state.vehicles[0]?state.vehicles[0].id:'';
+  cs.innerHTML=state.vehicles.map(v=>`<option value="${esc(v.id)}">${esc(v.name)}${v.detail?'｜'+esc(v.detail):''}</option>`).join('');
+  cs.value=state.chartVehicle;
   const fs=document.getElementById('fuelStaff'),cur=fs.value;
   fs.innerHTML='<option value="">選択してください</option>'+state.staff.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   fs.value=cur;
@@ -420,8 +437,36 @@ function renderHome(){
     return`<div class="vehicle"><div class="vehicle-head"><div><div class="vehicle-name">${esc(v.name)}</div><div class="vehicle-sub">${esc(v.detail)}</div></div>${hasAlert?'<span class="badge warn">要確認</span>':'<span class="badge ok">OK</span>'}</div><div class="stats"><div class="stat"><div class="v">${count}</div><div class="k">30日給油回数</div></div><div class="stat"><div class="v">${run}</div><div class="k">直近走行距離</div></div></div></div>`;
   }).join('');
   document.getElementById('vehicleCards').innerHTML=cardHtml||'<div class="empty">車両がありません。</div>';
+  renderChart();
   const recentRecs=sortDesc(state.records).slice(0,8);
   document.getElementById('recentTable').innerHTML=historyTableHTML(recentRecs,false);
+}
+
+function renderChart(){
+  const box=document.getElementById('chartBox');
+  const pts=state.records.filter(r=>r.vehicleId===state.chartVehicle&&r.odometer!=null&&!r.outlier)
+    .map(r=>({t:parseDate(r.date).getTime(),y:r.odometer,date:r.date,staff:r.staff})).sort((a,b)=>a.t-b.t);
+  if(!pts.length){box.innerHTML='<div class="empty">この車両の走行距離データがありません。</div>';return}
+  const W=900,H=340,L=78,R=24,T=20,B=44;
+  let minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
+  if(minY===maxY){minY-=1;maxY+=1}
+  const padY=(maxY-minY)*0.08;minY=Math.floor(minY-padY);maxY=Math.ceil(maxY+padY);
+  let minT=pts[0].t,maxT=pts[pts.length-1].t;
+  if(minT===maxT){minT-=86400000;maxT+=86400000}
+  const x=t=>L+(t-minT)/(maxT-minT)*(W-L-R),y=v=>T+(maxY-v)/(maxY-minY)*(H-T-B);
+  let g='';
+  for(let i=0;i<=4;i++){
+    const v=minY+(maxY-minY)*i/4,yy=y(v);
+    g+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#e5e7eb"/><text x="${L-8}" y="${yy+4}" text-anchor="end" font-size="12" fill="#6b7280">${num(Math.round(v))}</text>`;
+  }
+  for(let i=0;i<=4;i++){
+    const t=minT+(maxT-minT)*i/4,xx=x(t),d=new Date(t);
+    g+=`<text x="${xx}" y="${H-B+22}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="12" fill="#6b7280">${d.getMonth()+1}/${d.getDate()}</text>`;
+  }
+  const line=pts.map((p,i)=>(i?'L':'M')+x(p.t).toFixed(1)+' '+y(p.y).toFixed(1)).join(' ');
+  const dots=pts.map(p=>`<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="#dac623" stroke="#111" stroke-width="1.5"><title>${fmtDate(p.date)}　${num(p.y)} km　${esc(p.staff)}</title></circle>`).join('');
+  const last=pts[pts.length-1];
+  box.innerHTML=`<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="積算走行距離の推移">${g}<path d="${line}" fill="none" stroke="#111" stroke-width="2.5" stroke-linejoin="round"/>${dots}</svg><div class="muted" style="margin-top:6px">走行距離計の値の推移（km）｜最新 ${num(last.y)} km（${fmtDate(last.date)}）</div>`;
 }
 
 // days を指定すると、その日数以内の給油記録のアラートのみ返す
