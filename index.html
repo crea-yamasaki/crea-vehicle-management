@@ -234,6 +234,7 @@
 </div>
 
 <div id="loading" class="loading">読み込み中...</div>
+<div id="toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:300;max-width:90vw;padding:10px 16px;border-radius:12px;background:#111;color:#fff;font-size:13px;font-weight:700;display:none"></div>
 
 <script>
 const ADMIN_PASSWORD='19810324';
@@ -254,21 +255,17 @@ window.addEventListener('load',init);
 async function init(){
   setLoading(true);
   try{
-    const resp=await fetch(SHEET_CSV_URL,{cache:'no-store'});
+    const resp=await fetch(SHEET_CSV_URL+'&t='+Date.now(),{cache:'no-store'});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const sheetRecords=parseSheetCsv(await resp.text());
-    const localRecs=readLocalRecords().filter(r=>r.source!=='sheet'||r.edited),localById=new Map(localRecs.map(r=>[r.id,r]));
-    state.records=sheetRecords.map(r=>localById.get(r.id)||r).concat(localRecs.filter(r=>!sheetRecords.some(x=>x.id===r.id)));
-    state.vehicles=buildVehicles(state.records);
+    state.records=parseSheetCsv(await resp.text());
     state.sheetLoaded=true;
   }catch(e){
     console.error('Sheet load failed:',e.message);
-    state.vehicles=DEMO_VEHICLES;
-    state.records=readLocalRecords();
+    state.records=[];
+    showToast('スプレッドシートを読み込めませんでした',true);
   }
-  if(localStorage.getItem('creaVehicles')!==null) state.vehicles=readSavedVehicles();
   state.records=state.records.filter(r=>{const [y,m]=r.date.split('-');return y>2026||(y=='2026'&&m>'08')});
-  loadStaff();
+  await loadConfig();
   analyzeRecords();
   populateSelects();
   renderAll();
@@ -536,7 +533,6 @@ async function saveFuel(){
     staff:document.getElementById('fuelStaff').value.trim(),
     memo:document.getElementById('fuelMemo').value.trim()
   };
-  if(orig&&orig.source==='sheet') record.edited=true;
   const err=validateFuel(record,id);
   if(err){document.getElementById('fuelError').textContent=err;return}
   setLoading(true);
@@ -545,9 +541,9 @@ async function saveFuel(){
       await apiUpdateRecord(record);
       const idx=state.records.findIndex(x=>x.id===id); if(idx>=0) state.records[idx]=record;
     }else{
-      const saved=await apiSaveRecord(record); record.id=String(saved?.id||record.id); state.records.push(record);
+      const saved=await apiSaveRecord(record); record.id=String(saved.id); record.timestamp=saved.timestamp||''; record.source='sheet'; state.records.push(record);
     }
-    persistLocal(); closeFuelModal(); refreshAfterChange();
+    closeFuelModal(); refreshAfterChange();
   }catch(e){document.getElementById('fuelError').textContent='保存に失敗しました。'+(e?.message||'');}
   finally{setLoading(false)}
 }
@@ -586,7 +582,9 @@ function addVehicle(){
   const name=document.getElementById('vehicleName').value.trim();
   if(!name){document.getElementById('vehicleName').focus();return}
   const detail=document.getElementById('vehicleDetail').value.trim();
-  state.vehicles.push({id:Date.now().toString(),name:name,detail:detail});
+  const nv={name:name,detail:detail};nv.id=vehicleKey(nv);
+  if(state.vehicles.some(v=>v.id===nv.id)){showToast('同じ車両が登録済みです',true);return}
+  state.vehicles.push(nv);
   saveVehicles();
   document.getElementById('vehicleName').value='';
   document.getElementById('vehicleDetail').value='';
@@ -607,12 +605,39 @@ function editStaff(){
   document.getElementById('staffEditModal').classList.add('show');
   document.getElementById('staffName').focus();
 }
-function loadStaff(){
-  const raw=localStorage.getItem('creaStaff');
-  if(raw!==null){try{state.staff=JSON.parse(raw)}catch(e){state.staff=[]}}
-  else{state.staff=Array.from(new Set(state.records.map(r=>r.staff).filter(x=>x))).sort();saveStaff()}
+function vehicleKey(v){return v.name+(v.detail?'('+v.detail+')':'')}
+function normVehicles(list){return list.map(v=>/^\d+$/.test(String(v.id))?{...v,id:vehicleKey(v)}:v)}
+async function loadConfig(){
+  let cfg=null;
+  try{
+    const resp=await fetch(GAS_URL+'?api=config&t='+Date.now(),{cache:'no-store'});
+    const j=await resp.json();
+    if(j.ok) cfg=j.config||{};
+  }catch(e){console.warn('config load failed:',e.message)}
+  const hasV=cfg&&Array.isArray(cfg.vehicles)&&cfg.vehicles.length>0;
+  const hasS=cfg&&Array.isArray(cfg.staff);
+  const derivedV=buildVehicles(state.records);
+  state.vehicles=hasV?normVehicles(cfg.vehicles):(cfg?normVehicles(readSavedVehicles()):[]);
+  if(!state.vehicles.length) state.vehicles=derivedV;
+  const derivedS=Array.from(new Set(state.records.map(r=>r.staff).filter(x=>x))).sort();
+  state.staff=hasS?cfg.staff:derivedS;
+  if(cfg&&(!hasV||!hasS)) saveConfigRemote();
+  if(!cfg) showToast('車両・使用者の設定を読み込めませんでした',true);
 }
-function saveStaff(){try{localStorage.setItem('creaStaff',JSON.stringify(state.staff))}catch(e){console.error('Save failed:',e)}}
+let toastTimer=null;
+function showToast(msg,isError){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=isError?'#b91c1c':'#111';t.style.display='block';
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.style.display='none'},isError?6000:2000);
+}
+let cfgQueue=Promise.resolve();
+function saveConfigRemote(){
+  const cfg={vehicles:state.vehicles,staff:state.staff};
+  cfgQueue=cfgQueue.then(()=>gasPost({action:'saveConfig',config:cfg}))
+    .then(()=>showToast('保存しました'))
+    .catch(e=>showToast('保存に失敗しました：'+(e.message||e),true));
+}
+function saveStaff(){saveConfigRemote()}
 function renderStaffList(){
   const html=state.staff.map((n,i)=>{
     const armed=state.pendingDel==='s'+i;
@@ -637,8 +662,7 @@ function addStaff(){
   populateSelects();
 }
 function closeStaffModal(){state.pendingDel=null;document.getElementById('staffEditModal').classList.remove('show')}
-function saveVehicles(){try{localStorage.setItem('creaVehicles',JSON.stringify(state.vehicles))}catch(e){console.error('Save failed:',e)}}
-function readSavedVehicles(){try{return JSON.parse(localStorage.getItem('creaVehicles')||'[]')}catch(e){return[]}}
+function saveVehicles(){saveConfigRemote()}
 
 function showPage(name){
   if(name==='admin'&&!state.admin){openAdminLogin();return}
@@ -649,65 +673,17 @@ function showPage(name){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-async function apiGetData(){
-  try{
-    const resp=await fetch(GAS_URL+'?action=getVehicleAppData');
-    if(!resp.ok) throw new Error('API error');
-    return await resp.json();
-  }catch(e){
-    console.warn('GAS fetch failed, using local:',e.message);
-    return {vehicles:DEMO_VEHICLES,records:readLocalRecords()};
-  }
+async function gasPost(payload){
+  const resp=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+  if(!resp.ok) throw new Error('通信エラー ('+resp.status+')');
+  const j=await resp.json();
+  if(!j.ok) throw new Error(j.error||'保存に失敗しました');
+  return j;
 }
-
-async function apiSaveRecord(record){
-  try{
-    const resp=await fetch(GAS_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'saveFuelRecord',record:record})
-    });
-    if(!resp.ok) throw new Error('API error');
-    return await resp.json();
-  }catch(e){
-    console.warn('Save to GAS failed, using local:',e.message);
-    return {ok:true,id:record.id};
-  }
-}
-
-async function apiUpdateRecord(record){
-  try{
-    const resp=await fetch(GAS_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'updateFuelRecord',record:record})
-    });
-    if(!resp.ok) throw new Error('API error');
-    return await resp.json();
-  }catch(e){
-    console.warn('Update in GAS failed:',e.message);
-    return {ok:true};
-  }
-}
-
-async function apiDeleteRecord(id){
-  try{
-    const resp=await fetch(GAS_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'deleteFuelRecord',id:id})
-    });
-    if(!resp.ok) throw new Error('API error');
-    return await resp.json();
-  }catch(e){
-    console.warn('Delete in GAS failed:',e.message);
-    return {ok:true};
-  }
-}
-
-function readLocalRecords(){try{return JSON.parse(localStorage.getItem('creaVehicleRecords')||'[]')}catch(e){return[]}}
-function persistLocal(){localStorage.setItem('creaVehicleRecords',JSON.stringify(state.records.filter(r=>r.source!=='sheet'||r.edited)))}
 function refreshAfterChange(){analyzeRecords();renderAll();if(state.admin)renderAdmin()}
+function apiSaveRecord(record){return gasPost({action:'saveFuelRecord',record:record})}
+function apiUpdateRecord(record){return gasPost({action:'updateFuelRecord',record:record})}
+function readSavedVehicles(){try{return JSON.parse(localStorage.getItem('creaVehicles')||'[]')}catch(e){return[]}}
 
 function setLoading(v){document.getElementById('loading').classList.toggle('show',!!v)}
 function parseDate(s){if(!s)return null;const d=new Date(String(s).replace(/\//g,'-')+'T00:00:00');return isNaN(d)?null:d}
