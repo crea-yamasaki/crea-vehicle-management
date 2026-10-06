@@ -446,10 +446,10 @@ let chartResizeTimer=null;
 window.addEventListener('resize',()=>{clearTimeout(chartResizeTimer);chartResizeTimer=setTimeout(()=>{if(state.records.length)renderChart()},150)});
 function renderChart(){
   const box=document.getElementById('chartBox');
-  const pts=state.records.filter(r=>r.vehicleId===state.chartVehicle&&r.odometer!=null&&!r.outlier)
+  const pts=state.records.filter(r=>r.vehicleId===state.chartVehicle&&r.odometer!=null&&!r.outlier&&dayDiff(r.date,todayStr())<=59)
     .map(r=>({t:parseDate(r.date).getTime(),y:r.odometer,date:r.date,staff:r.staff})).sort((a,b)=>a.t-b.t);
-  if(!pts.length){box.innerHTML='<div class="empty">この車両の走行距離データがありません。</div>';return}
-  const W=Math.max(280,Math.round(box.clientWidth||900)),small=W<520,H=small?260:340,L=small?54:78,R=small?14:24,T=20,B=44;
+  if(!pts.length){box.innerHTML='<div class="empty">過去60日間にこの車両の走行距離データがありません。</div>';return}
+  const W=Math.max(280,Math.round(box.clientWidth||900)),small=W<520,H=small?221:289,L=small?54:78,R=small?14:24,T=20,B=44;
   let minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
   if(minY===maxY){minY-=1;maxY+=1}
   const padY=(maxY-minY)*0.08;minY=Math.floor(minY-padY);maxY=Math.ceil(maxY+padY);
@@ -468,7 +468,7 @@ function renderChart(){
   const line=pts.map((p,i)=>(i?'L':'M')+x(p.t).toFixed(1)+' '+y(p.y).toFixed(1)).join(' ');
   const dots=pts.map(p=>`<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="#dac623" stroke="#111" stroke-width="1.5"><title>${fmtDate(p.date)}　${num(p.y)} km　${esc(p.staff)}</title></circle>`).join('');
   const last=pts[pts.length-1];
-  box.innerHTML=`<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="積算走行距離の推移">${g}<path d="${line}" fill="none" stroke="#111" stroke-width="2.5" stroke-linejoin="round"/>${dots}</svg><div class="muted" style="margin-top:6px">走行距離計の値の推移（km）｜最新 ${num(last.y)} km（${fmtDate(last.date)}）</div>`;
+  box.innerHTML=`<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="積算走行距離の推移">${g}<path d="${line}" fill="none" stroke="#111" stroke-width="2.5" stroke-linejoin="round"/>${dots}</svg><div class="muted" style="margin-top:6px">過去60日｜走行距離計の値の推移（km）｜最新 ${num(last.y)} km（${fmtDate(last.date)}）</div>`;
 }
 
 // days を指定すると、その日数以内の給油記録のアラートのみ返す
