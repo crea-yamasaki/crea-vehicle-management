@@ -37,6 +37,10 @@
     .btn.small{padding:7px 10px;border-radius:9px;font-size:12px}
     main{max-width:1180px;margin:auto;padding:24px 20px 60px}
     .page{display:none}.page.active{display:block}
+    .hero{position:relative;overflow:hidden;background:#111;color:#fff;border-radius:32px;padding:52px 48px 44px;margin-bottom:22px;min-height:190px;display:flex;flex-direction:column;justify-content:center;gap:18px}
+    .hero::after{content:"";position:absolute;top:-42%;right:-6%;width:46%;aspect-ratio:1;border-radius:50%;background:#f4ec4e}
+    .hero h2{position:relative;z-index:1;margin:0;font-size:56px;line-height:1.1;font-weight:900;letter-spacing:.02em}
+    .hero p{position:relative;z-index:1;margin:0;font-size:14px;opacity:.9}
     .page-title{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:18px}
     .page-title h2{margin:0;font-size:28px}.muted{color:var(--gray);font-size:13px}
     .grid2{display:grid;grid-template-columns:1fr 1.15fr;gap:18px}
@@ -88,6 +92,7 @@
     .loading.show{display:grid}
     @media(max-width:800px){
       header{padding:10px 12px 0}
+      .hero{padding:32px 24px 26px;min-height:140px;border-radius:24px;gap:12px}.hero h2{font-size:34px}.hero p{font-size:12px}.hero::after{width:58%;top:-30%;right:-18%}
       .header-inner{padding:10px 14px;border-radius:28px;flex-wrap:wrap;gap:8px}
       .brand h1{font-size:16px}.brand-sub{font-size:9px}.logo{width:40px;height:40px;font-size:20px}
       .header-actions{margin-left:0;width:100%;justify-content:space-between}
@@ -112,6 +117,7 @@
 
   <main>
     <section id="page-home" class="page active">
+      <div class="hero"><h2>車両管理</h2><p>給油記録・走行距離・アラートを一元管理します。</p></div>
       <div class="page-title"><div><h2>ダッシュボード</h2><div class="muted">集計期間：過去30日</div></div><div class="muted" id="lastUpdated"></div></div>
       <div class="card section">
         <div class="chart-head">
