@@ -202,6 +202,7 @@
       <div class="error full" id="fuelError"></div>
     </div>
     <div class="form-actions">
+      <button class="btn danger" id="fuelDeleteBtn" style="display:none;margin-right:auto" onclick="deleteFuel()">削除</button>
       <button class="btn ghost" onclick="closeFuelModal()">キャンセル</button>
       <button class="btn primary" onclick="saveFuel()">保存</button>
     </div>
@@ -564,9 +565,32 @@ function openFuelModal(){
   document.getElementById('fuelVehicle').value='';
   document.getElementById('fuelDate').value=todayStr();
   document.getElementById('fuelError').textContent='';
+  resetFuelDelete(false);
   document.getElementById('fuelModal').classList.add('show');
 }
 function closeFuelModal(){document.getElementById('fuelModal').classList.remove('show')}
+let fuelDeleteArmed=false;
+function resetFuelDelete(show){
+  fuelDeleteArmed=false;
+  const b=document.getElementById('fuelDeleteBtn');
+  b.textContent='削除';b.style.display=show?'':'none';
+}
+async function deleteFuel(){
+  const id=document.getElementById('fuelId').value.trim();
+  if(!id)return;
+  if(!fuelDeleteArmed){fuelDeleteArmed=true;document.getElementById('fuelDeleteBtn').textContent='本当に削除';return}
+  const orig=state.records.find(x=>x.id===id);
+  if(!orig)return;
+  setLoading(true);
+  try{
+    await gasPost({action:'deleteFuelRecord',record:orig});
+    const m=/^s_(\d+)$/.exec(id),row=m?Number(m[1]):0;
+    state.records=state.records.filter(r=>r.id!==id);
+    if(row) state.records.forEach(r=>{const k=/^s_(\d+)$/.exec(r.id);if(k&&Number(k[1])>row)r.id='s_'+(Number(k[1])-1)});
+    closeFuelModal();refreshAfterChange();showToast('削除しました');
+  }catch(e){document.getElementById('fuelError').textContent='削除に失敗しました。'+(e?.message||'');resetFuelDelete(true)}
+  finally{setLoading(false)}
+}
 
 function editFuel(id){
   const r=state.records.find(x=>x.id===id); if(!r)return;
@@ -580,6 +604,7 @@ function editFuel(id){
   fsel.value=r.staff;
   document.getElementById('fuelMemo').value=r.memo||'';
   document.getElementById('fuelError').textContent='';
+  resetFuelDelete(true);
   document.getElementById('fuelModal').classList.add('show');
 }
 
