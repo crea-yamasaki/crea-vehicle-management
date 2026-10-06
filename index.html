@@ -39,6 +39,7 @@
     .alert-list{display:grid;gap:10px}
     .alert{padding:13px 14px;border-radius:12px;background:var(--red-bg);border-left:4px solid var(--red);font-size:14px}
     .alert strong{display:block;margin-bottom:4px}
+    .alert.recent{background:#f7f7f5;border-left-color:var(--yellow);margin-top:8px}
     .empty{padding:24px;text-align:center;color:var(--gray);background:#fafafa;border-radius:12px}
     .vehicle-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     .vehicle-cards .vehicle{padding:12px;min-width:0}
@@ -426,7 +427,9 @@ function renderAll(){
 
 function renderHome(){
   const alerts=buildAlerts(0).slice(0,6);
-  document.getElementById('alertList').innerHTML=alertsHTML(alerts);
+  const recent7=recordsWithin(7).filter(r=>!(r.alerts||[]).length);
+  const recentHtml=recent7.length?`<div class="muted" style="margin:14px 0 8px;font-weight:800">直近7日の給油（${recent7.length}件）</div>`+recent7.map(r=>{const v=vehicleOf(r);return`<div class="alert recent"><strong>${esc(v.name)}${v.detail?' ｜ '+esc(v.detail):''}</strong><div class="muted">${fmtDate(r.date)}・${r.odometer!=null?num(r.odometer)+' km・':''}記入者 ${esc(r.staff)}</div></div>`}).join(''):'';
+  document.getElementById('alertList').innerHTML=alertsHTML(alerts)+recentHtml;
   const cardHtml=state.vehicles.map(v=>{
     const records=state.records.filter(r=>r.vehicleId===v.id);
     const last30=records.filter(r=>dayDiff(r.date,todayStr())<=29);
