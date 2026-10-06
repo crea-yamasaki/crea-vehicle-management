@@ -17,12 +17,18 @@
     button,input,select,textarea{font:inherit}
     button{cursor:pointer}
     .app{min-height:100vh}
-    header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-    .header-inner{max-width:1180px;margin:auto;padding:14px 20px;display:flex;align-items:center;gap:14px}
+    header{position:sticky;top:0;z-index:20;padding:14px 20px 0}
+    .header-inner{max-width:1180px;margin:auto;padding:14px 20px 14px 28px;display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-radius:999px;box-shadow:0 10px 36px rgba(0,0,0,.08)}
     .brand{display:flex;align-items:center;gap:12px;min-width:0}
-    .logo{width:42px;height:42px;border-radius:12px;background:var(--yellow);display:grid;place-items:center;font-weight:900}
-    .brand h1{font-size:20px;margin:0;white-space:nowrap}
-    .header-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+    .logo{width:52px;height:52px;flex:none;border-radius:50%;background:#111;color:#fff;display:grid;place-items:center;font-weight:900;font-size:26px}
+    .brand-text{display:grid;gap:3px;min-width:0}
+    .brand h1{font-size:19px;line-height:1.2;margin:0;white-space:nowrap}
+    .brand-sub{font-size:10px;letter-spacing:.28em;color:var(--gray);white-space:nowrap}
+    .header-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .header-actions .btn{border-radius:999px;padding:13px 22px;background:transparent;color:#111}
+    .header-actions .btn.primary{background:var(--yellow);box-shadow:0 6px 16px rgba(218,198,35,.35)}
+    .header-actions .btn.ghost{border:0}
+    .header-actions .btn.dark{background:transparent;color:#111}
     .btn{border:0;border-radius:12px;padding:11px 15px;font-weight:800;background:#ececec;color:#111}
     .btn.primary{background:var(--yellow)}
     .btn.dark{background:#111;color:#fff}
@@ -81,8 +87,11 @@
     .loading{position:fixed;inset:0;z-index:200;background:rgba(255,255,255,.65);display:none;place-items:center;font-weight:900}
     .loading.show{display:grid}
     @media(max-width:800px){
-      .header-inner{padding:11px 14px}.brand h1{font-size:17px}.logo{width:36px;height:36px}
-      .header-actions .btn{padding:9px 10px;font-size:12px}
+      header{padding:10px 12px 0}
+      .header-inner{padding:10px 14px;border-radius:28px;flex-wrap:wrap;gap:8px}
+      .brand h1{font-size:16px}.brand-sub{font-size:9px}.logo{width:40px;height:40px;font-size:20px}
+      .header-actions{margin-left:0;width:100%;justify-content:space-between}
+      .header-actions .btn{padding:9px 12px;font-size:12px}
       main{padding:18px 12px 50px}.grid2{grid-template-columns:1fr}.vehicle-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
       .form-grid{grid-template-columns:1fr}.page-title h2{font-size:24px}
     }
@@ -92,7 +101,7 @@
 <div class="app">
   <header>
     <div class="header-inner">
-      <div class="brand"><div class="logo">C</div><h1>Crea 車両管理</h1></div>
+      <div class="brand"><div class="logo">C</div><div class="brand-text"><h1>Crea 車両管理</h1><div class="brand-sub">VEHICLE MANAGEMENT</div></div></div>
       <div class="header-actions">
         <button class="btn primary" onclick="openFuelModal()">給油新規登録</button>
         <button class="btn ghost" onclick="showPage('history')">給油履歴</button>
@@ -118,10 +127,6 @@
       <div class="card section">
         <h3>車両サマリー</h3>
         <div id="vehicleCards" class="vehicle-cards"></div>
-      </div>
-      <div class="card section">
-        <h3>直近の給油履歴</h3>
-        <div id="recentTable"></div>
       </div>
     </section>
 
@@ -444,8 +449,6 @@ function renderHome(){
   }).join('');
   document.getElementById('vehicleCards').innerHTML=cardHtml||'<div class="empty">車両がありません。</div>';
   renderChart();
-  const recentRecs=sortDesc(state.records).slice(0,8);
-  document.getElementById('recentTable').innerHTML=historyTableHTML(recentRecs,false);
 }
 
 let chartResizeTimer=null;
