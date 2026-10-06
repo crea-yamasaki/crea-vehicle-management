@@ -452,7 +452,7 @@ function recordsWithin(days){
 
 function historyTableHTML(recs,showEdit){
   if(!recs.length) return '<div class="empty">給油履歴がありません。</div>';
-  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>前回比</th><th>記入者</th><th>確認</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=vehicleOf(r);const warn=(r.alerts||[]).length;return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v.name)} ${v.detail?esc(v.detail):''}</td><td>${r.odometer!=null?num(r.odometer)+' km':'—'}</td><td>${r.run!=null?(r.run>=0?'+':'')+num(r.run)+' km':'—'}</td><td>${esc(r.staff)}</td><td>${warn?`<span class="badge warn" title="${esc(r.alerts.join('\n'))}">要確認</span>`:'<span class="badge ok">OK</span>'}</td>${showEdit?(r.source==='sheet'?`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button></td>`:`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button><button class="btn small danger" onclick="deleteFuel('${jsq(r.id)}')">削除</button></td>`):''}</tr>`}).join('')}</tbody></table></div>`;
+  return`<div class="table-wrap"><table><thead><tr><th>給油日</th><th>車両</th><th>走行距離</th><th>前回比</th><th>記入者</th><th>確認</th>${showEdit?'<th></th>':''}</tr></thead><tbody>${recs.map(r=>{const v=vehicleOf(r);const warn=(r.alerts||[]).length;return`<tr><td>${fmtDate(r.date)}</td><td>${esc(v.name)} ${v.detail?esc(v.detail):''}</td><td>${r.odometer!=null?num(r.odometer)+' km':'—'}</td><td>${r.run!=null?(r.run>=0?'+':'')+num(r.run)+' km':'—'}</td><td>${esc(r.staff)}</td><td>${warn?`<span class="badge warn" title="${esc(r.alerts.join('\n'))}">要確認</span>`:'<span class="badge ok">OK</span>'}</td>${showEdit?(r.source==='sheet'?`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button></td>`:`<td><button class="btn small" onclick="editFuel('${jsq(r.id)}')">編集</button></td>`):''}</tr>`}).join('')}</tbody></table></div>`;
 }
 
 function renderHistory(){
@@ -561,14 +561,6 @@ function validateFuel(r,editingId){
     .sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
   if(prev && r.odometer<prev.odometer) return `走行距離が前回記録（${num(prev.odometer)}km）より少ないため登録できません。`;
   return '';
-}
-
-async function deleteFuel(id){
-  if(!state.admin)return;
-  setLoading(true);
-  try{await apiDeleteRecord(id);state.records=state.records.filter(r=>r.id!==id);persistLocal();refreshAfterChange();}
-  catch(e){alert('削除に失敗しました。')}
-  finally{setLoading(false)}
 }
 
 function openAdminLogin(){document.getElementById('adminPassword').value='';document.getElementById('adminError').textContent='';document.getElementById('adminModal').classList.add('show');setTimeout(()=>document.getElementById('adminPassword').focus(),100)}
